@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-HTML fingerprint randomizer (interactive)
-
-- Entity-safe (won't split &nbsp; etc.)
-- Chunked span wrapping (less spammy than per-letter)
-- Does NOT modify text inside <a>...</a> (anchor text untouched)
-- Even smaller per-span position jitter
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -1508,7 +1499,6 @@ def main() -> None:
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
-    print("=== HTML Fingerprint Randomizer (Skip <a> Text + Smaller Jitter) ===")
     in_path = input("Input HTML file path: ").strip().strip('"').strip("'")
     p = Path(in_path)
     if not p.exists() or not p.is_file():
