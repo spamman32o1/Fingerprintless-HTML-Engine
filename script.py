@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import random
 import re
 import uuid
@@ -1450,7 +1451,72 @@ def prompt_int(msg: str, lo: int = 1) -> int:
         if n < lo:
             print(f"Must be >= {lo}.")
             continue
-        return n
+    return n
+
+
+def _prompt_yes_no(message: str) -> bool:
+    while True:
+        choice = input(message).strip().lower()
+        if choice in {"y", "yes"}:
+            return True
+        if choice in {"n", "no"}:
+            return False
+        print("Please enter y or n.")
+
+
+def _clean_path_text(text: str) -> str:
+    return text.strip().strip('"').strip("'")
+
+
+def _parse_input_paths(raw_input: str) -> list[Path]:
+    cleaned = _clean_path_text(raw_input)
+    if not cleaned:
+        return []
+    parts = [_clean_path_text(part) for part in cleaned.split(",")]
+    return [Path(part) for part in parts if part]
+
+
+def _pick_windows_files() -> list[Path]:
+    from tkinter import Tk, filedialog
+
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    paths = filedialog.askopenfilenames(
+        title="Select HTML files",
+        filetypes=[("HTML files", "*.html;*.htm"), ("All files", "*.*")],
+    )
+    root.destroy()
+    return [Path(path) for path in paths]
+
+
+def _collect_input_files() -> list[Path]:
+    while True:
+        if os.name == "nt":
+            raw = input(
+                "Input HTML file path(s) (comma-separated, blank to choose in File Explorer): "
+            )
+            raw = raw.strip()
+            if not raw:
+                paths = _pick_windows_files()
+            else:
+                paths = _parse_input_paths(raw)
+        else:
+            raw = input("Input HTML file path(s) (comma-separated): ")
+            paths = _parse_input_paths(raw)
+
+        if not paths:
+            print("No files provided. Please try again.")
+            continue
+
+        missing = [path for path in paths if not path.exists() or not path.is_file()]
+        if missing:
+            print("These paths were not found or are not files:")
+            for path in missing:
+                print(f"  - {path}")
+            continue
+
+        return paths
 
 
 FALLBACK_ENCODINGS = ("latin-1", "windows-1252")
@@ -1496,10 +1562,7 @@ def main() -> None:
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
-    in_path = input("Input HTML file path: ").strip().strip('"').strip("'")
-    p = Path(in_path)
-    if not p.exists() or not p.is_file():
-        raise SystemExit(f"File not found: {p}")
+    input_paths = _collect_input_files()
 
     input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
@@ -1532,23 +1595,47 @@ def main() -> None:
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
     )
-    raw_html = read_text_with_fallback(p, input_encoding)
-    sanitized = sanitize_input_html(raw_html)
-    content = extract_body_content(sanitized)
-    lang = extract_lang(sanitized)
-
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    outdir = Path(f"variants_{ts}")
-    outdir.mkdir(parents=True, exist_ok=True)
+    output_mode = "single"
+    if len(input_paths) > 1:
+        use_same = _prompt_yes_no(
+            "Multiple input files detected. Use the same output folder for all? (y/n): "
+        )
+        output_mode = "same" if use_same else "different"
+
+    base_outdir = Path(f"variants_{ts}")
+    if output_mode in {"single", "same"}:
+        base_outdir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random()
 
-    for i in range(1, opt.count + 1):
-        variant_title = random_title()
-        variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
-        (outdir / f"variant_{i:03d}.html").write_text(variant, encoding="utf-8")
+    output_locations: list[Path] = []
+    for input_path in input_paths:
+        raw_html = read_text_with_fallback(input_path, input_encoding)
+        sanitized = sanitize_input_html(raw_html)
+        content = extract_body_content(sanitized)
+        lang = extract_lang(sanitized)
 
-    print(f"\nDone. Wrote {opt.count} files to: {outdir.resolve()}")
+        if output_mode == "different":
+            outdir = Path(f"variants_{ts}_{input_path.stem}")
+            outdir.mkdir(parents=True, exist_ok=True)
+            filename_prefix = ""
+        else:
+            outdir = base_outdir
+            filename_prefix = f"{input_path.stem}_"
+
+        for i in range(1, opt.count + 1):
+            variant_title = random_title()
+            variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
+            (outdir / f"{filename_prefix}variant_{i:03d}.html").write_text(variant, encoding="utf-8")
+
+        output_locations.append(outdir.resolve())
+
+    if output_mode == "same":
+        print(f"\nDone. Wrote {opt.count * len(input_paths)} files to: {base_outdir.resolve()}")
+    else:
+        for outdir in output_locations:
+            print(f"\nDone. Wrote {opt.count} files to: {outdir}")
 
 
 if __name__ == "__main__":
