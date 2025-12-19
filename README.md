@@ -14,6 +14,7 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 - 🧪 **Synonym Swaps**: Optionally applies synonym maps to create **subtle** textual variance.
 - 🧼 **Sanitization & Minification**: Normalizes input HTML and outputs compressed, efficient variants.
 - 🎲 **Natural Randomization**: Each run uses fresh randomness to keep every output uniquely varied.
+- 🧾 **Metanoise Layering**: Injects realistic, randomized `<meta>` blocks (including `name`, `property`, and `http-equiv`) to mimic organic metadata footprints.
 
 ## 🛠️ Usage
 1. Run the script:
@@ -25,6 +26,15 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 4. (Optional) Supply a synonym map file with `wordA | wordB | wordC` lines.
 
 The script outputs a timestamped `variants_YYYYMMDD_HHMMSS` directory filled with variant HTML files.
+
+## 🧾 Metanoise
+Every generated variant automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:
+
+- Picks a mix of `name`, `property`, and `http-equiv` tags from diverse categories (SEO, social, caching, mobile, privacy) to keep headers varied.
+- Randomizes attribute casing, whitespace, separators, and occasionally prefixes values with unique identifiers for organic entropy.
+- Avoids obvious duplication while still allowing selective repeats so the head looks hand-authored rather than machine-perfect.
+
+This head-level noise strengthens the variants’ ability to evade fingerprinting while remaining standards-compliant and harmless to content rendering.
 
 ## 📦 Requirements
 - Python 3.10+
