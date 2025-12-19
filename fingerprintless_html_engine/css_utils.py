@@ -12,27 +12,40 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     quote_font = None
     code_font = None
 
+    heading_fonts = [
+        '"Impact", "Haettenschweiler", "Franklin Gothic Bold", "Arial Black", sans-serif',
+        '"Oswald", "Roboto Condensed", "Helvetica Condensed", "Arial Narrow", sans-serif',
+        '"Bebas Neue", "League Gothic", "Oswald", "Inter", sans-serif',
+        '"Montserrat", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif',
+        '"Roboto Slab", "Rockwell", "Clarendon", "Bookman", serif',
+        '"Arvo", "Egyptienne", "Cambria", "Book Antiqua", serif',
+        '"Arial Rounded MT Bold", "Segoe UI Rounded", Nunito, "Trebuchet MS", sans-serif',
+        pick(rng, FONT_STACKS),
+    ]
+    quote_fonts = [
+        '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Times New Roman", serif',
+        "Georgia, 'Times New Roman', Times, serif",
+        'ui-serif, "New York", "Times New Roman", serif',
+        '"Roboto Slab", "Rockwell", "Clarendon", "Bookman", serif',
+        '"Pacifico", "Segoe Script", "Comic Sans MS", "Brush Script MT", cursive',
+        '"Patrick Hand", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive',
+        '"Noto Serif CJK SC", "Songti SC", STSong, "SimSun", serif',
+    ]
+    code_fonts = [
+        'ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        'Consolas, "Liberation Mono", "Courier New", monospace',
+        '"JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+        '"Fira Code", "Source Code Pro", Menlo, Consolas, monospace',
+        '"Cascadia Code", "Segoe UI Mono", "SFMono-Regular", Menlo, Consolas, monospace',
+        '"IBM Plex Mono", "Source Code Pro", Menlo, Consolas, monospace',
+    ]
+
     if maybe(rng, 0.55):
-        heading_font = pick(rng, FONT_STACKS)
-    if maybe(rng, 0.35):
-        quote_font = pick(
-            rng,
-            [
-                '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Times New Roman", serif',
-                "Georgia, 'Times New Roman', Times, serif",
-                'ui-serif, "New York", "Times New Roman", serif',
-                '"Noto Serif CJK SC", "Songti SC", STSong, "SimSun", serif',
-            ],
-        )
-    if maybe(rng, 0.45):
-        code_font = pick(
-            rng,
-            [
-                'ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                'Consolas, "Liberation Mono", "Courier New", monospace',
-                '"JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-            ],
-        )
+        heading_font = pick(rng, heading_fonts)
+    if maybe(rng, 0.38):
+        quote_font = pick(rng, quote_fonts)
+    if maybe(rng, 0.50):
+        code_font = pick(rng, code_fonts)
 
     font_size = rfloat(rng, 14.2, 16.0, 2)
     line_height = rfloat(rng, 1.36, 1.60, 3)
@@ -105,11 +118,26 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
 
     extra_rules: list[str] = []
     if heading_font:
-        extra_rules.append(f"h1,h2,h3,h4,h5,h6{{font-family:{heading_font};}}")
+        heading_style: list[str] = [f"font-family:{heading_font};"]
+        if maybe(rng, 0.45):
+            heading_style.append(f"font-weight:{pick(rng, ['600', '700', '800', '900'])};")
+        if maybe(rng, 0.18):
+            heading_style.append("font-style:italic;")
+        extra_rules.append("h1,h2,h3,h4,h5,h6{" + "".join(heading_style) + "}")
     if quote_font:
-        extra_rules.append(f"blockquote{{font-family:{quote_font};}}")
+        quote_style: list[str] = [f"font-family:{quote_font};"]
+        if maybe(rng, 0.40):
+            quote_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
+        if maybe(rng, 0.55):
+            quote_style.append("font-style:italic;")
+        extra_rules.append("blockquote{" + "".join(quote_style) + "}")
     if code_font:
-        extra_rules.append(f"code,pre,kbd,samp{{font-family:{code_font};}}")
+        code_style: list[str] = [f"font-family:{code_font};"]
+        if maybe(rng, 0.35):
+            code_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
+        if maybe(rng, 0.08):
+            code_style.append("font-style:italic;")
+        extra_rules.append("code,pre,kbd,samp{" + "".join(code_style) + "}")
 
     return body_css, wrapper_css, "".join(extra_rules)
 
