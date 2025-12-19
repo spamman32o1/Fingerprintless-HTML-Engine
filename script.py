@@ -10,6 +10,7 @@ HTML fingerprint randomizer (interactive)
 
 from __future__ import annotations
 
+import argparse
 import html
 import json
 import random
@@ -1247,12 +1248,53 @@ def prompt_int(msg: str, lo: int = 1) -> int:
         return n
 
 
+FALLBACK_ENCODINGS = ("latin-1", "windows-1252")
+
+
+def read_text_with_fallback(path: Path, encoding: str) -> str:
+    try:
+        return path.read_text(encoding=encoding)
+    except UnicodeError as exc:
+        for fallback in FALLBACK_ENCODINGS:
+            if fallback.lower() == encoding.lower():
+                continue
+            try:
+                print(f"Decode error with '{encoding}'. Retrying with '{fallback}'.")
+                return path.read_text(encoding=fallback)
+            except UnicodeError:
+                continue
+        raise SystemExit(
+            f"Could not decode '{path}' with '{encoding}' or fallbacks "
+            f"{', '.join(FALLBACK_ENCODINGS)}."
+        ) from exc
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument(
+        "--encoding",
+        help="Input HTML encoding (default: utf-8; on decode error retries latin-1 then windows-1252).",
+    )
+    args = parser.parse_args()
+
     print("=== HTML Fingerprint Randomizer (Skip <a> Text + Smaller Jitter) ===")
     in_path = input("Input HTML file path: ").strip().strip('"').strip("'")
     p = Path(in_path)
     if not p.exists() or not p.is_file():
         raise SystemExit(f"File not found: {p}")
+
+    if args.encoding:
+        input_encoding = args.encoding.strip()
+    else:
+        input_encoding = (
+            input(
+                "Input encoding (default: utf-8; on decode error retries latin-1 then windows-1252): "
+            )
+            .strip()
+            .lower()
+        )
+        if not input_encoding:
+            input_encoding = "utf-8"
 
     count = prompt_int("How many variants? ", lo=1)
     seed_in = input("Optional seed (blank = random): ").strip()
@@ -1300,7 +1342,7 @@ def main() -> None:
         ie_condition_randomize=ie_noise,
         structure_randomize=structure_randomize,
     )
-    raw_html = p.read_text(encoding="utf-8")
+    raw_html = read_text_with_fallback(p, input_encoding)
     sanitized = sanitize_input_html(raw_html)
     content = extract_body_content(sanitized)
     lang = extract_lang(sanitized)
