@@ -78,10 +78,24 @@ META_NOISE_CANDIDATES = [
     ("application-name", ["Reader", "Letterbox", "HTML Shell", "DocFrame"]),
     ("generator", ["fp-less-engine", "static-maker", "markup-crafter"]),
     ("author", ["layout", "markup", "builder", "compose"]),
+    (
+        "application-category",
+        ["productivity", "utilities", "documentation", "offline-viewer"],
+    ),
     ("keywords", ["letters", "content", "layout", "wrapper", "document"]),
     ("description", ["Document shell", "Layout wrapper", "Content frame", "Minimal placeholder"]),
     ("theme-color", ["#f8f8f8", "#ffffff", "#111111", "#f3f3f3"]),
-    ("referrer", ["no-referrer", "origin", "same-origin", "strict-origin-when-cross-origin"]),
+    (
+        "referrer",
+        [
+            "no-referrer",
+            "origin",
+            "same-origin",
+            "strict-origin-when-cross-origin",
+            "origin-when-cross-origin",
+            "no-referrer-when-downgrade",
+        ],
+    ),
     ("robots", ["index, follow", "noindex, nofollow", "noarchive", "nosnippet"]),
     ("color-scheme", ["light dark", "only light", "light", "dark"]),
     (
@@ -97,13 +111,69 @@ META_NOISE_CANDIDATES = [
     ("distribution", ["Global", "Worldwide", "Public"]),
     ("format-detection", ["telephone=no", "date=no", "email=no"]),
     ("profile:label", ["content-shell", "doc-frame", "layout-pass"]),
-    ("data-origin", ["capture", "archive", "render", "variant"]),
-    ("data-layout-step", ["draft", "pass", "final", "stable"]),
+    (
+        "data-origin",
+        [
+            "capture",
+            "archive",
+            "render",
+            "variant",
+            "trace-" + uuid.uuid4().hex[:4],
+        ],
+    ),
+    (
+        "data-layout-step",
+        [
+            "draft",
+            "pass",
+            "final",
+            "stable",
+            "pass_" + uuid.uuid4().hex[:3],
+        ],
+    ),
+    (
+        "apple-mobile-web-app-title",
+        ["DocShell", "ReaderFrame", "Shell-View", "Frame_Viewer"],
+    ),
+    (
+        "apple-mobile-web-app-capable",
+        ["yes", "no", "YES", "minimal-ui"],
+    ),
+    (
+        "apple-mobile-web-app-status-bar-style",
+        ["default", "black", "black-translucent", "light-content"],
+    ),
+    (
+        "twitter:site",
+        ["@shell_app", "@DocFrame", "@LayoutViewer", "@frame_app"],
+    ),
+    (
+        "twitter:title",
+        ["Doc Shell", "Content Wrapper", "Frame_View", "Layout-Panel"],
+    ),
+    (
+        "twitter:description",
+        [
+            "document shell preview",
+            "layout frame - v1",
+            "content-wrapper_" + uuid.uuid4().hex[:5],
+            "frame builder beta",
+        ],
+    ),
 ]
 
 HTTP_EQUIV_NOISE_CANDIDATES = [
     ("content-language", ["en", "en-US", "en-GB", "fr", "de"]),
-    ("cache-control", ["no-cache", "max-age=0", "no-store"]),
+    (
+        "cache-control",
+        [
+            "no-cache",
+            "max-age=0",
+            "no-store",
+            "max-age=300, must-revalidate",
+            "private, max-age=60, stale-while-revalidate=30",
+        ],
+    ),
     ("pragma", ["no-cache"]),
     ("expires", ["0", "Mon, 01 Jan 1990 00:00:00 GMT"]),
     ("x-ua-compatible", ["IE=edge"]),
@@ -111,6 +181,15 @@ HTTP_EQUIV_NOISE_CANDIDATES = [
     ("default-style", ["base", "clean", "main"]),
     ("content-type", ["text/html; charset=utf-8", "text/html; charset=iso-8859-1"]),
     ("refresh", ["30", "120"]),
+    (
+        "referrer",
+        [
+            "strict-origin",
+            "same-origin",
+            "origin-when-cross-origin",
+            "no-referrer",
+        ],
+    ),
 ]
 
 PROPERTY_NOISE_CANDIDATES = [
@@ -118,9 +197,29 @@ PROPERTY_NOISE_CANDIDATES = [
     ("og:locale", ["en_US", "en_GB", "fr_FR", "de_DE"]),
     ("og:section", ["layout", "content", "shell", "frame"]),
     ("og:site_name", ["Document Shell", "Layout Frame", "Content Panel"]),
+    (
+        "og:title",
+        ["Doc Shell", "Content Wrapper", "Frame_View", "Layout-Panel"],
+    ),
     ("social:card", ["summary", "summary_large", "compact"]),
     ("social:title", ["Document shell", "Layout wrapper", "Content frame"]),
-    ("social:description", ["Minimal placeholder", "Layout shell", "Content summary"]),
+    (
+        "social:description",
+        [
+            "Minimal placeholder",
+            "Layout shell",
+            "Content summary",
+            "frame detail " + uuid.uuid4().hex[:4],
+        ],
+    ),
+    (
+        "twitter:site",
+        ["@shell_app", "@DocFrame", "@LayoutViewer", "@frame_app"],
+    ),
+    (
+        "twitter:title",
+        ["Doc Shell", "Content Wrapper", "Frame_View", "Layout-Panel"],
+    ),
 ]
 
 
