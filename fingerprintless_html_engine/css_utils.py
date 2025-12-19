@@ -6,8 +6,33 @@ from .constants import BG_COLORS, FONT_STACKS, TEXT_COLORS
 from .random_utils import maybe, pick, rfloat
 
 
-def random_css(rng: random.Random) -> tuple[str, str]:
+def random_css(rng: random.Random) -> tuple[str, str, str]:
     base_font = pick(rng, FONT_STACKS)
+    heading_font = None
+    quote_font = None
+    code_font = None
+
+    if maybe(rng, 0.55):
+        heading_font = pick(rng, FONT_STACKS)
+    if maybe(rng, 0.35):
+        quote_font = pick(
+            rng,
+            [
+                '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Times New Roman", serif',
+                "Georgia, 'Times New Roman', Times, serif",
+                'ui-serif, "New York", "Times New Roman", serif',
+                '"Noto Serif CJK SC", "Songti SC", STSong, "SimSun", serif',
+            ],
+        )
+    if maybe(rng, 0.45):
+        code_font = pick(
+            rng,
+            [
+                'ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                'Consolas, "Liberation Mono", "Courier New", monospace',
+                '"JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+            ],
+        )
 
     font_size = rfloat(rng, 14.2, 16.0, 2)
     line_height = rfloat(rng, 1.36, 1.60, 3)
@@ -78,7 +103,15 @@ def random_css(rng: random.Random) -> tuple[str, str]:
         ]
     )
 
-    return body_css, wrapper_css
+    extra_rules: list[str] = []
+    if heading_font:
+        extra_rules.append(f"h1,h2,h3,h4,h5,h6{{font-family:{heading_font};}}")
+    if quote_font:
+        extra_rules.append(f"blockquote{{font-family:{quote_font};}}")
+    if code_font:
+        extra_rules.append(f"code,pre,kbd,samp{{font-family:{code_font};}}")
+
+    return body_css, wrapper_css, "".join(extra_rules)
 
 
 def letter_style(rng: random.Random) -> str:

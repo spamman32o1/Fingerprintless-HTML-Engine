@@ -5,6 +5,17 @@ import re
 FONT_STACKS = [
     'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
     'system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", Roboto, Arial, sans-serif',
+    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+    '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Times New Roman", serif',
+    "Georgia, 'Times New Roman', Times, serif",
+    'ui-serif, "New York", "Times New Roman", serif',
+    'ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    'Consolas, "Liberation Mono", "Courier New", monospace',
+    '"Arial Rounded MT Bold", "Segoe UI Rounded", Nunito, "Trebuchet MS", sans-serif',
+    '"Noto Sans CJK SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif',
+    '"Noto Sans CJK JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif',
+    '"Noto Sans CJK KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", sans-serif',
+    '"Noto Serif CJK SC", "Songti SC", STSong, "SimSun", serif',
 ]
 
 TEXT_COLORS = ["#111", "#121212", "#0f0f0f"]
