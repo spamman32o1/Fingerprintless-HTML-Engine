@@ -56,6 +56,7 @@ TEMPLATE_SPLIT_RE = re.compile(r"(##.*?##)", re.DOTALL)
 TABLE_TAG_RE = re.compile(r"<table([^>]*)>", re.IGNORECASE)
 CELLSPACING_ATTR_RE = re.compile(r"\bcellspacing\s*=\s*([\"']?)([^\"'\s>]+)\1", re.IGNORECASE)
 STYLE_ATTR_RE = re.compile(r"\bstyle\s*=\s*([\"'])(.*?)\1", re.IGNORECASE | re.DOTALL)
+CENTER_TAG_RE = re.compile(r"^<\s*(/?)\s*center\b([^>]*)>$", re.IGNORECASE)
 
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
@@ -304,6 +305,157 @@ def _css_spacing_value(raw_value: str | None) -> str:
     if NUMERIC_VALUE_RE.match(value):
         return f"{value}px"
     return value
+
+
+def _css_border_value(raw_value: str | None) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+    if NUMERIC_VALUE_RE.match(value):
+        return f"{value}px solid"
+    return value
+
+
+def _style_has_prop(style_lower: str, prop: str) -> bool:
+    return bool(re.search(rf"{re.escape(prop)}\s*:", style_lower))
+
+
+def _merge_style_value(style_value: str | None, additions: list[tuple[str, str]]) -> str:
+    merged_style = style_value or ""
+    style_lower = merged_style.lower()
+    to_add: list[str] = []
+    for prop, value in additions:
+        if not value or _style_has_prop(style_lower, prop):
+            continue
+        to_add.append(f"{prop}:{value};")
+
+    if not to_add:
+        return merged_style
+
+    if merged_style and not merged_style.rstrip().endswith(";"):
+        merged_style = f"{merged_style};"
+    if merged_style:
+        merged_style = f"{merged_style} {' '.join(to_add)}"
+    else:
+        merged_style = " ".join(to_add)
+    return merged_style
+
+
+def _parse_tag_attrs(attr_text: str) -> list[tuple[str, str, str | None]]:
+    attrs: list[tuple[str, str, str | None]] = []
+    pos = 0
+    while pos < len(attr_text):
+        while pos < len(attr_text) and attr_text[pos].isspace():
+            pos += 1
+        if pos >= len(attr_text):
+            break
+
+        m_attr = ATTR_RE.match(attr_text, pos)
+        if not m_attr:
+            return []
+
+        raw = m_attr.group(0).strip()
+        attr_name = m_attr.group(1)
+        value = _parse_attr_value(m_attr.group(2))
+        attrs.append((attr_name, raw, value))
+        pos = m_attr.end()
+    return attrs
+
+
+def _normalize_center_tag(tag: str) -> str:
+    match = CENTER_TAG_RE.match(tag)
+    if not match:
+        return tag
+
+    is_close = bool(match.group(1))
+    rest = match.group(2)
+    if is_close:
+        return "</div>"
+
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    updated_attrs: list[str] = []
+    style_value: str | None = None
+    for attr_name, raw, value in attrs:
+        if attr_name.lower() == "style":
+            style_value = value or ""
+        else:
+            updated_attrs.append(raw)
+
+    merged_style = _merge_style_value(style_value, [("text-align", "center")])
+    if merged_style or style_value is not None:
+        updated_attrs.append(f'style="{merged_style}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<div {attr_str}{slash}>"
+    return f"<div{slash}>"
+
+
+def _normalize_table_td_attrs(tag: str) -> str:
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    if name.lower() not in {"table", "td"} or not rest.strip():
+        return tag
+
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    updated_attrs: list[str] = []
+    style_value: str | None = None
+    additions: list[tuple[str, str]] = []
+    align_value: str | None = None
+
+    for attr_name, raw, value in attrs:
+        attr_lower = attr_name.lower()
+        if attr_lower == "style":
+            style_value = value or ""
+            continue
+        if attr_lower == "border":
+            border_value = _css_border_value(value)
+            if border_value:
+                additions.append(("border", border_value))
+            continue
+        if attr_lower == "cellpadding":
+            additions.append(("padding", _css_spacing_value(value)))
+            continue
+        if attr_lower == "width":
+            additions.append(("width", _css_spacing_value(value)))
+            continue
+        if attr_lower == "align":
+            align_value = (value or "").strip().lower()
+            continue
+        updated_attrs.append(raw)
+
+    if align_value:
+        additions.append(("text-align", align_value))
+
+    if not additions and style_value is None and len(updated_attrs) == len(attrs):
+        return tag
+
+    merged_style = _merge_style_value(style_value, additions)
+    if merged_style or style_value is not None or additions:
+        updated_attrs.append(f'style="{merged_style}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
 
 
 def normalize_table_cellspacing(tag: str) -> str:
@@ -634,7 +786,25 @@ def sanitize_input_html(html_in: str) -> str:
     """
 
     without_comments = re.sub(r"<!--.*?-->", "", html_in, flags=re.DOTALL)
-    return re.sub(r">\s+<", "><", without_comments)
+    normalized = normalize_input_html(without_comments)
+    return re.sub(r">\s+<", "><", normalized)
+
+
+def normalize_input_html(html_in: str) -> str:
+    parts = TAG_SPLIT_RE.split(html_in)
+    out: List[str] = []
+
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("<") and part.endswith(">"):
+            normalized = _normalize_center_tag(part)
+            normalized = _normalize_table_td_attrs(normalized)
+            out.append(normalized)
+        else:
+            out.append(part)
+
+    return "".join(out)
 
 
 def minify_output_html(html_text: str) -> str:
@@ -989,6 +1159,7 @@ def build_variant(
     if synonym_patterns is None:
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
+    content_html = normalize_input_html(content_html)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css = random_css(rng)
     wrapper_class = f"wrap-{uuid.uuid4().hex[:6]}"

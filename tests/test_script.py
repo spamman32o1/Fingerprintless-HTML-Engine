@@ -104,3 +104,38 @@ def test_replace_cellspacing_with_css() -> None:
     assert 'cellspacing="6"' not in updated
     assert 'style="border-spacing:6;"' in updated
     assert '<table class="promo" style="border-spacing:6;">' in updated
+
+
+def test_normalize_center_tags_to_divs() -> None:
+    html_in = "<center>Hi</center>"
+    updated = script.normalize_input_html(html_in)
+
+    assert "<center>" not in updated
+    assert "</center>" not in updated
+    assert updated == '<div style="text-align:center;">Hi</div>'
+
+
+def test_normalize_table_and_cell_attrs_to_styles() -> None:
+    html_in = (
+        '<table border="1" cellpadding="4" width="600" align="center">'
+        '<tr><td border="2" cellpadding="3" width="200" align="right">Hi</td></tr>'
+        "</table>"
+    )
+    updated = script.normalize_input_html(html_in)
+
+    assert 'border="1"' not in updated
+    assert 'cellpadding="4"' not in updated
+    assert 'width="600"' not in updated
+    assert 'align="center"' not in updated
+    assert 'border="2"' not in updated
+    assert 'cellpadding="3"' not in updated
+    assert 'width="200"' not in updated
+    assert 'align="right"' not in updated
+    assert "border:1px solid;" in updated
+    assert "padding:4px;" in updated
+    assert "width:600px;" in updated
+    assert "text-align:center;" in updated
+    assert "border:2px solid;" in updated
+    assert "padding:3px;" in updated
+    assert "width:200px;" in updated
+    assert "text-align:right;" in updated
