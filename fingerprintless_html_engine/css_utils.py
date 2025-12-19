@@ -64,43 +64,121 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     text_color = pick(rng, TEXT_COLORS)
     bg_color = pick(rng, BG_COLORS)
 
-    body_css = " ".join(
-        [
-            "margin: 0;",
-            f"background: {bg_color};",
-            f"color: {text_color};",
-            f"font-family: {base_font};",
-            f"font-size: {font_size}px;",
-            f"line-height: {line_height};",
-            f"letter-spacing: {letter_spacing}em;",
-            f"word-spacing: {word_spacing}em;",
-            f"opacity: {opacity};",
-        ]
-    )
+    body_background_images: list[str] = []
+    gradient_options = [
+        ("linear", "#fefefe", "#f7f8fb", 135),
+        ("linear", "#fcfcfc", "#f5f6f8", 165),
+        ("linear", "#faf9f7", "#f2f3f5", 95),
+        ("linear", "#f7f8f6", "#eef0f2", 45),
+        ("radial", "#f8f9fb", "#f2f4f6", 0),
+    ]
+    if maybe(rng, 0.30):
+        g_type, c1, c2, angle = pick(rng, gradient_options)
+        if g_type == "linear":
+            body_background_images.append(
+                f"linear-gradient({angle}deg, {c1} 0%, {c2} 100%)"
+            )
+        else:
+            body_background_images.append(
+                f"radial-gradient(circle at {pick(rng, ['20% 20%', '80% 15%', '50% 40%'])}, {c1} 0%, {c2} 70%)"
+            )
+
+    pattern_overlays = [
+        "linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0) 90%)",
+        "radial-gradient(circle at 25% 20%, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0) 40%)",
+        "linear-gradient(180deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.025) 70%, rgba(0,0,0,0) 100%)",
+        "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 36%)",
+    ]
+    if maybe(rng, 0.18):
+        body_background_images.append(pick(rng, pattern_overlays))
+
+    body_rules = [
+        "margin: 0;",
+        f"background-color: {bg_color};",
+        f"color: {text_color};",
+        f"font-family: {base_font};",
+        f"font-size: {font_size}px;",
+        f"line-height: {line_height};",
+        f"letter-spacing: {letter_spacing}em;",
+        f"word-spacing: {word_spacing}em;",
+        f"opacity: {opacity};",
+    ]
+
+    if body_background_images:
+        body_rules.append(f"background-image: {', '.join(body_background_images)};")
+    if body_background_images and maybe(rng, 0.28):
+        body_rules.append(f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};")
+
+    body_css = " ".join(body_rules)
 
     border_rad = rfloat(rng, 12.0, 20.0, 2)
-    border = "1px solid rgba(127,127,127,0.22)" if maybe(rng, 0.35) else "none"
-    shadow = "0 6px 18px rgba(0,0,0,0.07)" if maybe(rng, 0.25) else "none"
+    border = "none"
+    if maybe(rng, 0.55):
+        border_styles = [
+            f"1px solid rgba(127,127,127,{rfloat(rng, 0.16, 0.28, 3)})",
+            f"1px dashed rgba(110,110,110,{rfloat(rng, 0.16, 0.24, 3)})",
+            f"1px solid rgba(210,210,210,{rfloat(rng, 0.18, 0.30, 3)})",
+            f"1px double rgba(120,120,120,{rfloat(rng, 0.14, 0.22, 3)})",
+        ]
+        border = pick(rng, border_styles)
+
+    shadow = "none"
+    if maybe(rng, 0.42):
+        shadow = pick(
+            rng,
+            [
+                "0 6px 18px rgba(0,0,0,0.07)",
+                "0 10px 24px -12px rgba(15,23,42,0.22)",
+                "0 3px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.04)",
+                "inset 0 1px 0 rgba(255,255,255,0.65), 0 12px 28px rgba(15,23,42,0.12)",
+            ],
+        )
 
     layout_mode = pick(rng, ["block", "flow-root", "flex", "grid"])
     gap = rfloat(rng, 6.0, 14.0, 2)
     if layout_mode == "flex":
-        extra = " ".join(
-            [
-                "display:flex;",
-                "flex-direction:column;",
-                f"gap:{gap}px;",
-            ]
-        )
+        flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
+        if maybe(rng, 0.24):
+            flex_props.append(
+                f"align-items:{pick(rng, ['stretch', 'flex-start', 'center'])};"
+            )
+        if maybe(rng, 0.22):
+            flex_props.append(
+                f"justify-content:{pick(rng, ['flex-start', 'space-between', 'center'])};"
+            )
+        extra = " ".join(flex_props)
     elif layout_mode == "grid":
-        extra = " ".join(
-            [
-                "display:grid;",
-                f"gap:{gap}px;",
-            ]
-        )
+        grid_props = ["display:grid;", f"gap:{gap}px;"]
+        columns = rng.randint(1, 3)
+        if columns > 1 and maybe(rng, 0.60):
+            grid_props.append(
+                f"grid-template-columns: repeat({columns}, minmax(0, 1fr));"
+            )
+        if maybe(rng, 0.30):
+            grid_props.append(
+                f"justify-items:{pick(rng, ['start', 'stretch', 'center'])};"
+            )
+        if maybe(rng, 0.22):
+            grid_props.append(
+                f"align-items:{pick(rng, ['start', 'stretch', 'center'])};"
+            )
+        extra = " ".join(grid_props)
     else:
         extra = f"display:{layout_mode};"
+
+    text_align = None
+    if maybe(rng, 0.18):
+        text_align = pick(rng, ["start", "left", "center", "justify"])
+
+    translate_x = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
+    translate_y = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
+    transforms = [
+        f"rotate({rot}deg)",
+        f"skewX({skew}deg)",
+        f"scale({scale})",
+    ]
+    if translate_x or translate_y:
+        transforms.insert(0, f"translate({translate_x}px, {translate_y}px)")
 
     wrapper_css = " ".join(
         [
@@ -111,8 +189,9 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             f"border: {border};",
             f"box-shadow: {shadow};",
             extra,
-            f"transform: rotate({rot}deg) skewX({skew}deg) scale({scale});",
+            f"transform: {' '.join(transforms)};",
             "transform-origin: top left;",
+            f"text-align: {text_align};" if text_align else "",
         ]
     )
 

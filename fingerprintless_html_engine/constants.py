@@ -31,8 +31,29 @@ FONT_STACKS = [
     '"Noto Naskh Arabic", "Georgia", "Times New Roman", serif',
 ]
 
-TEXT_COLORS = ["#111", "#121212", "#0f0f0f"]
-BG_COLORS = ["#fff", "#fefefe", "#fcfcfc"]
+TEXT_COLORS = [
+    "#0f0f0f",
+    "#111",
+    "#121212",
+    "#171717",
+    "#1c1d1f",
+    "#202124",
+    "#242628",
+    "#2c2f33",
+    "#32363c",
+]
+BG_COLORS = [
+    "#fff",
+    "#fefefe",
+    "#fcfcfc",
+    "#faf9f7",
+    "#f7f8fb",
+    "#f5f7f9",
+    "#f4f5f1",
+    "#f2f4f6",
+    "#eef0f3",
+    "#edeef0",
+]
 
 ENTITY_RE = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]+|#[0-9]+|#x[0-9A-Fa-f]+);")
 TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
