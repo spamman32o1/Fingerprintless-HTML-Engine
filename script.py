@@ -770,7 +770,7 @@ def build_variant(
 
     table_fallback_open = (
         "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
-        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]>"
+        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
     )
     table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
 
