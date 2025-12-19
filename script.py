@@ -132,6 +132,29 @@ def normalize_text_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def read_text_with_fallback(
+    path: Path, fallback_encoding: str | None = None, errors: str = "replace"
+) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        if fallback_encoding:
+            try:
+                return path.read_text(encoding=fallback_encoding)
+            except UnicodeDecodeError:
+                print(
+                    "Warning: failed to decode as utf-8 or "
+                    f"{fallback_encoding}; using utf-8 with errors={errors}."
+                )
+                return path.read_bytes().decode("utf-8", errors=errors)
+
+        print(
+            "Warning: failed to decode as utf-8; "
+            f"using utf-8 with errors={errors}."
+        )
+        return path.read_bytes().decode("utf-8", errors=errors)
+
+
 def replace_cellspacing_with_css(html_text: str) -> str:
     def replace_table(match: re.Match[str]) -> str:
         attrs = match.group(1)
@@ -1300,7 +1323,18 @@ def main() -> None:
         ie_condition_randomize=ie_noise,
         structure_randomize=structure_randomize,
     )
-    raw_html = p.read_text(encoding="utf-8")
+    try:
+        raw_html = p.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        fallback_encoding = input(
+            "Input file is not valid UTF-8. "
+            "Enter fallback encoding (blank to use replacement): "
+        ).strip()
+        raw_html = read_text_with_fallback(
+            p,
+            fallback_encoding=fallback_encoding or None,
+            errors="replace",
+        )
     sanitized = sanitize_input_html(raw_html)
     content = extract_body_content(sanitized)
     lang = extract_lang(sanitized)

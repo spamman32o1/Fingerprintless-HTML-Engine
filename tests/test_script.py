@@ -139,3 +139,13 @@ def test_normalize_table_and_cell_attrs_to_styles() -> None:
     assert "padding:3px;" in updated
     assert "width:200px;" in updated
     assert "text-align:right;" in updated
+
+
+def test_read_text_with_fallback_uses_non_utf8_encoding(tmp_path: Path) -> None:
+    sample = "Olá, Señor!"
+    file_path = tmp_path / "latin1.html"
+    file_path.write_bytes(sample.encode("latin-1"))
+
+    decoded = script.read_text_with_fallback(file_path, fallback_encoding="latin-1")
+
+    assert decoded == sample
