@@ -133,33 +133,34 @@ def normalize_text_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _replace_table_cellspacing(match: re.Match[str]) -> str:
+    attrs = match.group(1)
+    spacing_match = CELLSPACING_ATTR_RE.search(attrs)
+    if not spacing_match:
+        return match.group(0)
+
+    spacing_value = spacing_match.group(2)
+    attrs_clean = CELLSPACING_ATTR_RE.sub("", attrs)
+    attrs_clean = re.sub(r"\s{2,}", " ", attrs_clean).strip()
+
+    border_spacing = f"border-spacing:{_css_spacing_value(spacing_value)};"
+    style_match = STYLE_ATTR_RE.search(attrs_clean)
+    if style_match:
+        quote = style_match.group(1)
+        style_value = style_match.group(2).strip()
+        if style_value and not style_value.rstrip().endswith(";"):
+            style_value = f"{style_value};"
+        style_value = f"{style_value}{border_spacing}"
+        new_style = f'style={quote}{style_value}{quote}'
+        attrs_clean = attrs_clean[: style_match.start()] + new_style + attrs_clean[style_match.end() :]
+    else:
+        attrs_clean = f'{attrs_clean} style="{border_spacing}"'.strip()
+
+    return f"<table{(' ' + attrs_clean) if attrs_clean else ''}>"
+
+
 def replace_cellspacing_with_css(html_text: str) -> str:
-    def replace_table(match: re.Match[str]) -> str:
-        attrs = match.group(1)
-        spacing_match = CELLSPACING_ATTR_RE.search(attrs)
-        if not spacing_match:
-            return match.group(0)
-
-        spacing_value = spacing_match.group(2)
-        attrs_clean = CELLSPACING_ATTR_RE.sub("", attrs)
-        attrs_clean = re.sub(r"\s{2,}", " ", attrs_clean).strip()
-
-        border_spacing = f"border-spacing:{_css_spacing_value(spacing_value)};"
-        style_match = STYLE_ATTR_RE.search(attrs_clean)
-        if style_match:
-            quote = style_match.group(1)
-            style_value = style_match.group(2).strip()
-            if style_value and not style_value.rstrip().endswith(";"):
-                style_value = f"{style_value};"
-            style_value = f"{style_value}{border_spacing}"
-            new_style = f'style={quote}{style_value}{quote}'
-            attrs_clean = attrs_clean[: style_match.start()] + new_style + attrs_clean[style_match.end() :]
-        else:
-            attrs_clean = f'{attrs_clean} style="{border_spacing}"'.strip()
-
-        return f"<table{(' ' + attrs_clean) if attrs_clean else ''}>"
-
-    return TABLE_TAG_RE.sub(replace_table, html_text)
+    return TABLE_TAG_RE.sub(_replace_table_cellspacing, html_text)
 
 
 def _normalized_json_order(rng: random.Random, val):
