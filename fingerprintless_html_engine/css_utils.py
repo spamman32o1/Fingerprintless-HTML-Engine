@@ -237,5 +237,6 @@ def letter_style(rng: random.Random) -> str:
         f"opacity:{op};"
         f"position:relative;top:{dy}px;"
         f"display:inline-block;"
+        "white-space:nowrap;"
         f"transform:rotate({rot}deg);"
     )
