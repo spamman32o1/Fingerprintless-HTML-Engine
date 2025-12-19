@@ -127,6 +127,10 @@ def apply_synonyms(text: str, rng: random.Random, patterns: List[Tuple[re.Patter
     return updated
 
 
+def normalize_text_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
 def replace_cellspacing_with_css(html_text: str) -> str:
     def replace_table(match: re.Match[str]) -> str:
         attrs = match.group(1)
@@ -779,7 +783,8 @@ def span_wrap_html(
                 if TEMPLATE_SPLIT_RE.fullmatch(segment):
                     out.append(segment)
                     continue
-                with_synonyms = apply_synonyms(segment, rng, synonym_patterns)
+                normalized = normalize_text_whitespace(segment)
+                with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
                 out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
 
     return "".join(out)
