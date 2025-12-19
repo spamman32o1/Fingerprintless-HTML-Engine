@@ -56,7 +56,7 @@ def build_variant(
     opt = randomize_opt_for_variant(rng, opt)
     content_html = normalize_input_html(content_html)
     content_html = replace_cellspacing_with_css(content_html)
-    body_css, wrapper_css = random_css(rng)
+    body_css, wrapper_css, extra_css = random_css(rng)
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
@@ -98,6 +98,7 @@ def build_variant(
         body_css=body_css,
         wrapper_css=wrapper_css,
         jsonld_scripts=jsonld_scripts,
+        extra_css=extra_css,
     )
     return minify_output_html(rendered)
 
@@ -116,6 +117,7 @@ def build_layout_template(
     body_css: str,
     wrapper_css: str,
     jsonld_scripts: str,
+    extra_css: str,
 ) -> str:
     head_html = (
         "<!doctype html>"
@@ -129,6 +131,7 @@ def build_layout_template(
         "<style>"
         f"body{{{body_css}}}"
         f".{wrapper_class}{{{wrapper_css}}}"
+        f"{extra_css}"
         "</style>"
         f"{jsonld_scripts}"
         "</head>"
