@@ -57,6 +57,22 @@ TEMPLATE_SPLIT_RE = re.compile(r"(##.*?##)", re.DOTALL)
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
 SAFE_WRAPPER_TAGS = {"div", "section", "span"}
+VOID_ELEMENTS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
 
 JSONLD_MUTATION_POOL = [
     {},
@@ -643,7 +659,7 @@ def _parse_html_nodes(html_in: str) -> _HtmlNode:
                 stack[-1].children.append(_HtmlNode(None, "", None, [], part))
                 continue
 
-            is_self_closing = part.rstrip().endswith("/>")
+            is_self_closing = part.rstrip().endswith("/>") or name in VOID_ELEMENTS
             node = _HtmlNode(tag=name, open_tag=part, close_tag=None, children=[], text="", self_closing=is_self_closing)
             stack[-1].children.append(node)
             if not is_self_closing:
