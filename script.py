@@ -190,13 +190,7 @@ def _violates_jsonld_guardrails(payload_text: str) -> bool:
 
 def _serialize_jsonld_payload(rng: random.Random, payload) -> str:
     separators = pick(rng, [(",", ":"), (",", ": "), (", ", ":"), (", ", ": ")])
-    indent_choice = pick(rng, [None, 0, 1, 2, 3])
-    indent = None if indent_choice in (None, 0) else indent_choice
-
-    base = json.dumps(payload, separators=separators, indent=indent)
-
-    if maybe(rng, 0.35):
-        base = f"\n{base}\n"
+    base = json.dumps(payload, separators=separators, indent=None)
 
     pad_left = " " * rint(rng, 0, 2)
     pad_right = " " * rint(rng, 0, 2)
@@ -680,7 +674,9 @@ def minify_output_html(html_text: str) -> str:
                         out.append(segment)
                         continue
                     if name == "script" and is_jsonld:
-                        out.append(segment.strip())
+                        collapsed = re.sub(r"\s+", " ", segment).strip()
+                        if collapsed:
+                            out.append(collapsed)
                     else:
                         collapsed = re.sub(r"\s+", " ", segment).strip()
                         if collapsed:
