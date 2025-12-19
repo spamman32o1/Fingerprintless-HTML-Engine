@@ -805,7 +805,7 @@ def sanitize_input_html(html_in: str) -> str:
 
     Comments are stripped using a DOTALL pattern to cover multiline blocks, and
     whitespace between tags (e.g., newlines/indentation) is collapsed from
-    ">\s+<" to "><" to avoid introducing visible gaps while leaving inline
+    ">\\s+<" to "><" to avoid introducing visible gaps while leaving inline
     text unchanged.
     """
 
@@ -1489,8 +1489,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
         "--encoding",
+        default="utf-8",
         help="Input HTML encoding (default: utf-8; on decode error retries latin-1 then windows-1252).",
     )
+    parser.add_argument("--seed", type=int, help="Random seed (default: random).")
+    parser.add_argument(
+        "--no-ie-conditional-comments",
+        action="store_false",
+        dest="ie_condition_randomize",
+        help="Disable randomized IE conditional comments.",
+    )
+    parser.add_argument(
+        "--no-structure-randomize",
+        action="store_false",
+        dest="structure_randomize",
+        help="Disable safe wrapper structure randomization.",
+    )
+    parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
     print("=== HTML Fingerprint Randomizer (Skip <a> Text + Smaller Jitter) ===")
@@ -1499,22 +1514,10 @@ def main() -> None:
     if not p.exists() or not p.is_file():
         raise SystemExit(f"File not found: {p}")
 
-    if args.encoding:
-        input_encoding = args.encoding.strip()
-    else:
-        input_encoding = (
-            input(
-                "Input encoding (default: utf-8; on decode error retries latin-1 then windows-1252): "
-            )
-            .strip()
-            .lower()
-        )
-        if not input_encoding:
-            input_encoding = "utf-8"
+    input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
     count = prompt_int("How many variants? ", lo=1)
-    seed_in = input("Optional seed (blank = random): ").strip()
-    seed = int(seed_in) if seed_in else None
+    seed = args.seed
 
     synonym_lines: List[str] = []
     while True:
@@ -1538,25 +1541,11 @@ def main() -> None:
     synonym_groups = parse_synonym_lines(synonym_lines)
     synonym_patterns = build_synonym_patterns(synonym_groups)
 
-    ie_noise_in = (
-        input("Add randomized IE conditional comments? (default: yes) [Y/n]: ")
-        .strip()
-        .lower()
-    )
-    ie_noise = True if ie_noise_in == "" else ie_noise_in in {"y", "yes", "true", "1"}
-
-    structure_in = (
-        input("Randomize safe wrapper structure? (default: yes) [Y/n]: ").strip().lower()
-    )
-    structure_randomize = (
-        True if structure_in == "" else structure_in in {"y", "yes", "true", "1"}
-    )
-
     opt = Opt(
         count=count,
         seed=seed,
-        ie_condition_randomize=ie_noise,
-        structure_randomize=structure_randomize,
+        ie_condition_randomize=args.ie_condition_randomize,
+        structure_randomize=args.structure_randomize,
     )
     raw_html = read_text_with_fallback(p, input_encoding)
     sanitized = sanitize_input_html(raw_html)
