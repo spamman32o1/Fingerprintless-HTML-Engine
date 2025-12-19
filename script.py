@@ -555,6 +555,19 @@ def build_variant(
     before = ie_before + noise_divs(rng, opt.noise_divs_max)
     after = noise_divs(rng, opt.noise_divs_max) + ie_after
 
+    outer_table_open = (
+        '<table role="presentation" class="layout-table" '
+        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
+        "<tr><td>"
+    )
+    outer_table_close = "</td></tr></table>"
+
+    table_fallback_open = (
+        "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
+        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]>"
+    )
+    table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
+
     depth = rint(rng, 1, max(1, opt.max_nesting))
     open_wrap = ""
     close_wrap = ""
@@ -581,9 +594,13 @@ def build_variant(
         f"{jsonld_scripts}"
         "</head>"
         "<body>"
+        f"{outer_table_open}"
+        f"{table_fallback_open}"
         "<div class=\"wrap\">"
         f"{open_wrap}{before}<div class=\"content\">{inner}</div>{after}{close_wrap}"
         "</div>"
+        f"{table_fallback_close}"
+        f"{outer_table_close}"
         "</body>"
         "</html>"
     )
