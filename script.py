@@ -244,6 +244,7 @@ def maybe(rng: random.Random, p: float) -> bool:
 
 
 ATTR_RE = re.compile(r"([a-zA-Z_:][-a-zA-Z0-9_:.]*)(\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s\"'>]+))?")
+NUMERIC_VALUE_RE = re.compile(r"^\d+(?:\.\d+)?$")
 
 
 def reorder_tag_attributes(rng: random.Random, tag: str) -> str:
@@ -286,6 +287,102 @@ def reorder_tag_attributes(rng: random.Random, tag: str) -> str:
     attr_str = " ".join(attrs)
     slash = " /" if trailing_slash else ""
     return f"<{name} {attr_str}{slash}>"
+
+
+def _parse_attr_value(value_text: str | None) -> str | None:
+    if not value_text:
+        return None
+
+    value = value_text.lstrip()
+    if value.startswith("="):
+        value = value[1:].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1]
+    return value
+
+
+def _css_spacing_value(raw_value: str | None) -> str:
+    value = (raw_value or "0").strip()
+    if NUMERIC_VALUE_RE.match(value):
+        return f"{value}px"
+    return value
+
+
+def normalize_table_cellspacing(tag: str) -> str:
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    if name.lower() != "table" or not rest.strip():
+        return tag
+
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attr_text = rest.strip()
+
+    attrs: list[tuple[str, str, str | None]] = []
+    pos = 0
+    while pos < len(attr_text):
+        while pos < len(attr_text) and attr_text[pos].isspace():
+            pos += 1
+        if pos >= len(attr_text):
+            break
+
+        m_attr = ATTR_RE.match(attr_text, pos)
+        if not m_attr:
+            return tag
+
+        raw = m_attr.group(0).strip()
+        attr_name = m_attr.group(1)
+        value = _parse_attr_value(m_attr.group(2))
+        attrs.append((attr_name, raw, value))
+        pos = m_attr.end()
+
+    cellspacing_value: str | None = None
+    updated_attrs: list[str] = []
+    style_value: str | None = None
+
+    for attr_name, raw, value in attrs:
+        if attr_name.lower() == "cellspacing":
+            cellspacing_value = value
+            continue
+        if attr_name.lower() == "style":
+            style_value = value or ""
+            continue
+        updated_attrs.append(raw)
+
+    if cellspacing_value is None:
+        return tag
+
+    style_lower = (style_value or "").lower()
+    additions: list[str] = []
+    if "border-spacing" not in style_lower:
+        additions.append(f"border-spacing: {_css_spacing_value(cellspacing_value)};")
+    if "border-collapse" not in style_lower:
+        additions.append("border-collapse: separate;")
+
+    merged_style = style_value or ""
+    if additions:
+        if merged_style and not merged_style.rstrip().endswith(";"):
+            merged_style = f"{merged_style};"
+        if merged_style:
+            merged_style = f"{merged_style} {' '.join(additions)}"
+        else:
+            merged_style = " ".join(additions)
+
+    if merged_style or style_value is not None:
+        updated_attrs.append(f'style="{merged_style}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    if attr_str:
+        slash = " /" if trailing_slash else ""
+        return f"<{name} {attr_str}{slash}>"
+    slash = " /" if trailing_slash else ""
+    return f"<{name}{slash}>"
 
 
 def random_css(rng: random.Random) -> Tuple[str, str]:
@@ -736,8 +833,10 @@ def span_wrap_html(
     rng: random.Random,
     html_in: str,
     opt: Opt,
-    synonym_patterns: List[Tuple[re.Pattern, List[str]]],
+    synonym_patterns: List[Tuple[re.Pattern, List[str]]] | None = None,
 ) -> str:
+    if synonym_patterns is None:
+        synonym_patterns = []
     parts = TAG_SPLIT_RE.split(html_in)
     out: List[str] = []
 
@@ -750,7 +849,8 @@ def span_wrap_html(
             continue
 
         if part.startswith("<") and part.endswith(">"):
-            reordered_tag = reorder_tag_attributes(rng, part)
+            normalized_tag = normalize_table_cellspacing(part)
+            reordered_tag = reorder_tag_attributes(rng, normalized_tag)
             out.append(reordered_tag)
             m = tagname_re.match(reordered_tag)
             if m:
@@ -792,8 +892,10 @@ def build_variant(
     idx: int,
     lang: str,
     title: str,
-    synonym_patterns: List[Tuple[re.Pattern, List[str]]],
+    synonym_patterns: List[Tuple[re.Pattern, List[str]]] | None = None,
 ) -> str:
+    if synonym_patterns is None:
+        synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css = random_css(rng)
