@@ -52,6 +52,7 @@ ENTITY_RE = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]+|#[0-9]+|#x[0-9A-Fa-f]+);")
 TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
 HTML_LANG_RE = re.compile(r"<html[^>]*?\blang\s*=\s*['\"]?([a-zA-Z0-9-]+)", re.IGNORECASE)
 BODY_RE = re.compile(r"<body[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
+TEMPLATE_SPLIT_RE = re.compile(r"(##.*?##)", re.DOTALL)
 
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
@@ -723,8 +724,15 @@ def span_wrap_html(
         if skip_depth > 0:
             out.append(part)
         else:
-            with_synonyms = apply_synonyms(part, rng, synonym_patterns)
-            out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
+            segments = TEMPLATE_SPLIT_RE.split(part)
+            for segment in segments:
+                if not segment:
+                    continue
+                if TEMPLATE_SPLIT_RE.fullmatch(segment):
+                    out.append(segment)
+                    continue
+                with_synonyms = apply_synonyms(segment, rng, synonym_patterns)
+                out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
 
     return "".join(out)
 
