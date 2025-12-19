@@ -35,7 +35,7 @@ class Opt:
     max_nesting: int = 4
     title_prefix: str = "Variant"
 
-    ie_condition_randomize: bool = False
+    ie_condition_randomize: bool = True
 
 
 FONT_STACKS = [
@@ -196,6 +196,42 @@ def ie_noise_block(rng: random.Random, enabled: bool) -> str:
         if maybe(rng, 0.65):
             bits.append(random_ie_conditional_comment(rng))
     return "".join(bits)
+
+
+META_NOISE_CANDIDATES = [
+    ("application-name", ["Reader", "Letterbox", "HTML Shell", "DocFrame"]),
+    ("generator", ["fp-less-engine", "static-maker", "markup-crafter"]),
+    ("author", ["layout", "markup", "builder", "compose"]),
+    ("keywords", ["letters", "content", "layout", "wrapper", "document"]),
+    ("rating", ["General", "Safe", "Clean"]),
+    ("distribution", ["Global", "Worldwide", "Public"]),
+    ("format-detection", ["telephone=no", "date=no", "email=no"]),
+    ("profile:label", ["content-shell", "doc-frame", "layout-pass"]),
+    ("data-origin", ["capture", "archive", "render", "variant"]),
+    ("data-layout-step", ["draft", "pass", "final", "stable"]),
+]
+
+
+def meta_noise(rng: random.Random) -> str:
+    n = rint(rng, 2, 6)
+    tags: list[str] = []
+    seen_names: set[str] = set()
+
+    for _ in range(n):
+        name, values = pick(rng, META_NOISE_CANDIDATES)
+        if name in seen_names and maybe(rng, 0.55):
+            continue
+        content = pick(rng, values)
+        if maybe(rng, 0.30):
+            content = f"{content}-{uuid.uuid4().hex[:6]}"
+        if maybe(rng, 0.20):
+            name = f"x-{name}" if not name.startswith("x-") else name
+        if maybe(rng, 0.12):
+            name = name.upper()
+        tags.append(f'<meta name="{html.escape(name, quote=True)}" content="{html.escape(content, quote=True)}" />')
+        seen_names.add(name)
+
+    return "".join(tags)
 
 
 def letter_style(rng: random.Random) -> str:
@@ -420,7 +456,7 @@ def build_variant(
         f"<html lang=\"{html.escape(lang, quote=True)}\">"
         "<head>"
         "<meta charset=\"utf-8\" />"
-        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />"
+        f"{meta_noise(rng)}"
         f"<title>{html.escape(title)}</title>"
         "<style>"
         f"body{{{body_css}}}"
@@ -462,11 +498,11 @@ def main() -> None:
     seed = int(seed_in) if seed_in else None
 
     ie_noise_in = (
-        input("Add randomized IE conditional comments? (default: no) [y/N]: ")
+        input("Add randomized IE conditional comments? (default: yes) [Y/n]: ")
         .strip()
         .lower()
     )
-    ie_noise = ie_noise_in in {"y", "yes", "true", "1"}
+    ie_noise = True if ie_noise_in == "" else ie_noise_in in {"y", "yes", "true", "1"}
 
     opt = Opt(count=count, seed=seed, ie_condition_randomize=ie_noise)
     raw_html = p.read_text(encoding="utf-8")
