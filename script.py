@@ -674,6 +674,38 @@ def build_variant(
         )
         close_wrap = "</div>" + close_wrap
 
+    container_tag = pick(rng, ["div", "section", "article", "main"])
+
+    def wrap_with_table(markup: str, include_table: bool) -> str:
+        if include_table:
+            return (
+                f"{outer_table_open}{table_fallback_open}"
+                f"{markup}{table_fallback_close}{outer_table_close}"
+            )
+        return markup
+
+    templates = [
+        lambda: wrap_with_table(
+            f"<{container_tag} class=\"{wrapper_class}\">"
+            f"{open_wrap}{before}<div class=\"{content_class}\">{inner}</div>"
+            f"{after}{close_wrap}</{container_tag}>",
+            include_table=True,
+        ),
+        lambda: wrap_with_table(
+            f"{before}<{container_tag} class=\"{wrapper_class}\">"
+            f"{open_wrap}<div class=\"{content_class}\">{inner}</div>{close_wrap}"
+            f"</{container_tag}>{after}",
+            include_table=False,
+        ),
+        lambda: wrap_with_table(
+            f"<{container_tag} class=\"{wrapper_class}\">"
+            f"{open_wrap}{before}<div class=\"{content_class}\">{inner}</div>"
+            f"{close_wrap}</{container_tag}>{after}",
+            include_table=True,
+        ),
+    ]
+    layout_markup = pick(rng, templates)()
+
     # No template whitespace around inner
     return (
         "<!doctype html>"
@@ -691,13 +723,7 @@ def build_variant(
         f"{jsonld_scripts}"
         "</head>"
         "<body>"
-        f"{outer_table_open}"
-        f"{table_fallback_open}"
-        f"<div class=\"{wrapper_class}\">"
-        f"{open_wrap}{before}<div class=\"{content_class}\">{inner}</div>{after}{close_wrap}"
-        "</div>"
-        f"{table_fallback_close}"
-        f"{outer_table_close}"
+        f"{layout_markup}"
         "</body>"
         "</html>"
     )
