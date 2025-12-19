@@ -3,8 +3,82 @@ from __future__ import annotations
 import html
 import random
 import uuid
+from datetime import datetime, timedelta
 
 from .random_utils import maybe, pick, rfloat, rint
+
+
+def _random_domain(rng: random.Random) -> str:
+    tlds = ["com", "net", "org", "io", "app", "site", "dev", "page", "cloud"]
+    syllables = [
+        "meta",
+        "frame",
+        "shell",
+        "doc",
+        "view",
+        "pane",
+        "grid",
+        "stack",
+        "layer",
+        "reader",
+    ]
+    labels = []
+    for _ in range(rint(rng, 1, 2)):
+        parts = [pick(rng, syllables) for _ in range(rint(rng, 1, 2))]
+        label = "".join(parts)
+        if maybe(rng, 0.40):
+            label = f"{label}{rint(rng, 1, 999)}"
+        labels.append(label)
+    labels.append(pick(rng, tlds))
+    return ".".join(labels)
+
+
+def _random_url(rng: random.Random) -> str:
+    prefix = pick(rng, ["https://", "http://", "https://www."])
+    segments = []
+    for _ in range(rint(rng, 1, 3)):
+        segment = uuid.uuid4().hex[: rint(rng, 3, 8)]
+        if maybe(rng, 0.30):
+            segment = f"{segment}-{pick(rng, ['view', 'doc', 'frame', 'content'])}"
+        segments.append(segment)
+    path = "/".join(segments)
+    if maybe(rng, 0.20):
+        path = f"{path}?v={rint(rng, 1, 40)}"
+    return f"{prefix}{_random_domain(rng)}/{path}"
+
+
+def _random_person_name(rng: random.Random) -> str:
+    first_names = [
+        "Alex",
+        "Jordan",
+        "Casey",
+        "Taylor",
+        "Riley",
+        "Avery",
+        "Morgan",
+    ]
+    last_names = [
+        "Kim",
+        "Rivera",
+        "Singh",
+        "Patel",
+        "Shaw",
+        "Carson",
+        "Ellis",
+        "Knight",
+    ]
+    return f"{pick(rng, first_names)} {pick(rng, last_names)}"
+
+
+def _random_date_string(rng: random.Random) -> str:
+    base = datetime(2015, 1, 1)
+    dt = base + timedelta(days=rint(rng, 0, 365 * 12), seconds=rint(rng, 0, 86400))
+    formats = [
+        "%Y-%m-%d",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%a, %d %b %Y %H:%M:%S GMT",
+    ]
+    return dt.strftime(pick(rng, formats))
 
 
 def noise_divs(rng: random.Random, nmax: int) -> str:
@@ -75,17 +149,49 @@ def ie_noise_block(rng: random.Random, enabled: bool) -> str:
 
 
 META_NOISE_CANDIDATES = [
-    ("application-name", ["Reader", "Letterbox", "HTML Shell", "DocFrame"]),
-    ("generator", ["fp-less-engine", "static-maker", "markup-crafter", "scribe-bundle"]),
-    ("author", ["layout", "markup", "builder", "compose", "assembler"]),
+    (
+        "application-name",
+        [
+            "Reader",
+            "Letterbox",
+            "HTML Shell",
+            "DocFrame",
+            lambda rng: f"{pick(rng, ['Shell', 'Frame', 'Layer'])}-{rint(rng, 10, 99)}",
+        ],
+    ),
+    (
+        "generator",
+        [
+            "fp-less-engine",
+            "static-maker",
+            "markup-crafter",
+            "scribe-bundle",
+            lambda rng: f"builder/{rint(rng, 1, 5)}.{rint(rng, 0, 9)}.{rint(rng, 0, 9)}",
+        ],
+    ),
+    ("author", [lambda rng: _random_person_name(rng), "layout", "markup", "builder", "compose", "assembler"]),
     (
         "application-category",
         ["productivity", "utilities", "documentation", "offline-viewer", "notes"],
     ),
-    ("keywords", ["letters", "content", "layout", "wrapper", "document", "reader"]),
+    (
+        "keywords",
+        [
+            "letters, content, layout",
+            "wrapper, document, reader",
+            lambda rng: f"{pick(rng, ['shell', 'frame', 'panel'])},{pick(rng, ['reader', 'viewer'])},{pick(rng, ['offline', 'archive'])}",
+        ],
+    ),
     (
         "description",
-        ["Document shell", "Layout wrapper", "Content frame", "Minimal placeholder", "Reader scaffold"],
+        [
+            "Document shell",
+            "Layout wrapper",
+            "Content frame",
+            "Minimal placeholder",
+            "Reader scaffold",
+            lambda rng: f"{pick(rng, ['static document', 'content pane', 'layout view'])} {uuid.uuid4().hex[:5]}",
+        ],
     ),
     ("theme-color", ["#f8f8f8", "#ffffff", "#111111", "#f3f3f3", "#0f172a"]),
     (
@@ -160,10 +266,10 @@ META_NOISE_CANDIDATES = [
     ("apple-touch-fullscreen", ["yes", "no"]),
     ("mobileoptimized", ["320", "375", "414"]),
     ("handheldfriendly", ["true", "yes"]),
-    ("google-site-verification", [uuid.uuid4().hex[:20], uuid.uuid4().hex[:24]]),
-    ("msvalidate.01", [uuid.uuid4().hex[:20], uuid.uuid4().hex[:24]]),
-    ("yandex-verification", [uuid.uuid4().hex[:20], uuid.uuid4().hex[:24]]),
-    ("facebook-domain-verification", [uuid.uuid4().hex[:20], uuid.uuid4().hex[:24]]),
+    ("google-site-verification", [lambda rng: uuid.uuid4().hex[: rint(rng, 16, 24)]]),
+    ("msvalidate.01", [lambda rng: uuid.uuid4().hex[: rint(rng, 16, 24)]]),
+    ("yandex-verification", [lambda rng: uuid.uuid4().hex[: rint(rng, 16, 24)]]),
+    ("facebook-domain-verification", [lambda rng: uuid.uuid4().hex[: rint(rng, 16, 24)]]),
     (
         "apple-itunes-app",
         [
@@ -176,11 +282,16 @@ META_NOISE_CANDIDATES = [
         "manifest",
         ["/manifest.json", "./static/manifest.webmanifest", "manifest.webmanifest"],
     ),
-    ("application-version", ["1.0", "1.2.3", "2024.04", "0.9.0-beta"]),
-    ("build-id", [uuid.uuid4().hex[:8], uuid.uuid4().hex[:10]]),
+    ("application-version", ["1.0", "1.2.3", "2024.04", "0.9.0-beta", lambda rng: f"{rint(rng, 0, 3)}.{rint(rng, 0, 9)}.{rint(rng, 0, 9)}"]),
+    ("build-id", [lambda rng: uuid.uuid4().hex[: rint(rng, 6, 12)]]),
     (
         "prefers-color-scheme",
         ["dark", "light", "light dark"],
+    ),
+    ("date", [lambda rng: _random_date_string(rng), lambda rng: _random_date_string(rng).split("T")[0]]),
+    (
+        "last-modified",
+        [lambda rng: _random_date_string(rng), lambda rng: _random_date_string(rng).split("T")[0]],
     ),
     (
         "twitter:site",
@@ -215,6 +326,7 @@ HTTP_EQUIV_NOISE_CANDIDATES = [
     ),
     ("pragma", ["no-cache", "public"]),
     ("expires", ["0", "Mon, 01 Jan 1990 00:00:00 GMT", "-1"]),
+    ("expires", [lambda rng: _random_date_string(rng)]),
     ("x-ua-compatible", ["IE=edge", "IE=11"]),
     ("x-dns-prefetch-control", ["on", "off"]),
     ("default-style", ["base", "clean", "main", "reader"]),
@@ -237,10 +349,17 @@ PROPERTY_NOISE_CANDIDATES = [
     ("og:type", ["document", "article", "page", "website", "profile"]),
     ("og:locale", ["en_US", "en_GB", "fr_FR", "de_DE", "es_ES"]),
     ("og:section", ["layout", "content", "shell", "frame", "wrapper"]),
-    ("og:site_name", ["Document Shell", "Layout Frame", "Content Panel", "Shell Stack"]),
+    ("og:site_name", ["Document Shell", "Layout Frame", "Content Panel", "Shell Stack", lambda rng: f"{pick(rng, ['Shell', 'Frame', 'Layout'])} {rint(rng, 100, 999)}"]),
     (
         "og:title",
-        ["Doc Shell", "Content Wrapper", "Frame_View", "Layout-Panel", "Reader Shell"],
+        [
+            "Doc Shell",
+            "Content Wrapper",
+            "Frame_View",
+            "Layout-Panel",
+            "Reader Shell",
+            lambda rng: f"{pick(rng, ['Content', 'Layout', 'Shell'])} {uuid.uuid4().hex[:4]}",
+        ],
     ),
     (
         "og:description",
@@ -250,19 +369,29 @@ PROPERTY_NOISE_CANDIDATES = [
             "Content summary",
             "frame detail " + uuid.uuid4().hex[:4],
             "document wrapper preview",
+            lambda rng: f"{pick(rng, ['Minimal placeholder', 'Layout shell', 'Content summary'])} {rint(rng, 1, 20)}",
         ],
     ),
-    ("og:url", ["https://example.com/" + uuid.uuid4().hex[:6], "/docs", "/viewer"]),
+    (
+        "og:url",
+        [
+            lambda rng: _random_url(rng),
+            lambda rng: f"https://{_random_domain(rng)}/docs/{uuid.uuid4().hex[:4]}",
+            lambda rng: f"/{pick(rng, ['docs', 'viewer', 'embed'])}/{uuid.uuid4().hex[:4]}",
+        ],
+    ),
     (
         "og:image",
         [
-            "https://example.com/img/share.png",
-            "https://cdn.example.com/" + uuid.uuid4().hex[:6] + "/card.jpg",
-            "https://assets.example.com/cover.png",
+            lambda rng: f"https://{_random_domain(rng)}/{uuid.uuid4().hex[:5]}.png",
+            lambda rng: f"https://cdn.{_random_domain(rng)}/{uuid.uuid4().hex[:6]}/card.jpg",
+            lambda rng: f"https://assets.{_random_domain(rng)}/cover-{rint(rng, 10, 99)}.jpg",
         ],
     ),
     ("og:image:alt", ["Document shell preview", "Layout preview", "Content card"]),
     ("og:determiner", ["the", "a", "an"]),
+    ("article:published_time", [lambda rng: _random_date_string(rng)]),
+    ("article:modified_time", [lambda rng: _random_date_string(rng)]),
     ("social:card", ["summary", "summary_large", "compact", "image"]),
     ("social:title", ["Document shell", "Layout wrapper", "Content frame", "Shell document"]),
     (
@@ -383,6 +512,8 @@ def meta_noise(rng: random.Random) -> str:
         if name_key in seen_names and not maybe(rng, 0.45):
             continue
         content = pick(rng, values)
+        if callable(content):
+            content = content(rng)
         if maybe(rng, 0.30):
             content = f"{content}-{uuid.uuid4().hex[:6]}"
         if attr_name == "name" and maybe(rng, 0.20):
