@@ -2,6 +2,13 @@ import json
 import random
 import re
 
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import script
 
 
@@ -53,3 +60,18 @@ def test_scripts_inserted_before_body_and_valid() -> None:
 
     for payload in scripts:
         _assert_guardrails(payload)
+
+
+def test_build_variant_includes_required_meta_tags() -> None:
+    rng = random.Random(9)
+    opt = script.Opt(count=1, seed=0)
+
+    variant = script.build_variant(rng, "<p>Meta test</p>", opt, 1, "en", "title")
+
+    head_content = variant.split("<head>", 1)[1].split("</head>", 1)[0]
+    meta_tags = re.findall(r"<meta[^>]+>", head_content)
+
+    assert len(meta_tags) >= 3
+    assert meta_tags[0] == '<meta charset="utf-8" />'
+    assert meta_tags[1] == '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+    assert meta_tags[2] == '<meta name="x-apple-disable-message-reformatting" />'
