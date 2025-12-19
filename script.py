@@ -128,7 +128,7 @@ def apply_synonyms(text: str, rng: random.Random, patterns: List[Tuple[re.Patter
 
 
 def normalize_text_whitespace(text: str) -> str:
-    return re.sub(r"\s+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def replace_cellspacing_with_css(html_text: str) -> str:
@@ -961,6 +961,8 @@ def span_wrap_html(
                     out.append(segment)
                     continue
                 normalized = normalize_text_whitespace(segment)
+                if not normalized:
+                    continue
                 with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
                 out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
 
