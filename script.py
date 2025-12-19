@@ -530,7 +530,7 @@ def random_ie_conditional_comment(rng: random.Random) -> str:
         [
             "",
             " ",
-            "<!--noop-->",
+            "<span></span>",
             "<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">",
         ],
     )
