@@ -144,7 +144,7 @@ def replace_cellspacing_with_css(html_text: str) -> str:
         attrs_clean = CELLSPACING_ATTR_RE.sub("", attrs)
         attrs_clean = re.sub(r"\s{2,}", " ", attrs_clean).strip()
 
-    border_spacing = f"border-spacing:{_css_spacing_value(spacing_value)};"
+        border_spacing = f"border-spacing:{_css_spacing_value(spacing_value)};"
         style_match = STYLE_ATTR_RE.search(attrs_clean)
         if style_match:
             quote = style_match.group(1)
