@@ -48,7 +48,7 @@ def test_scripts_inserted_before_body_and_valid() -> None:
     rng = random.Random(7)
     opt = script.Opt(count=1, seed=0)
 
-    variant = script.build_variant(rng, "<p>Example</p>", opt, 1, "en", "title")
+    variant = script.build_variant(rng, "<p>Example</p>", opt, 1, "en", "title", [])
     scripts = _extract_scripts(variant)
 
     body_index = variant.index("<body>")
@@ -66,7 +66,7 @@ def test_build_variant_includes_required_meta_tags() -> None:
     rng = random.Random(9)
     opt = script.Opt(count=1, seed=0)
 
-    variant = script.build_variant(rng, "<p>Meta test</p>", opt, 1, "en", "title")
+    variant = script.build_variant(rng, "<p>Meta test</p>", opt, 1, "en", "title", [])
 
     head_content = variant.split("<head>", 1)[1].split("</head>", 1)[0]
     meta_tags = re.findall(r"<meta[^>]+>", head_content)
@@ -90,8 +90,17 @@ def test_span_wrap_reorders_attributes() -> None:
     )
 
     html_in = '<p id="first" class="second" data-flag="true">Hello</p>'
-    wrapped = script.span_wrap_html(rng, html_in, opt)
+    wrapped = script.span_wrap_html(rng, html_in, opt, [])
 
     attrs = re.search(r"<p ([^>]+)>", wrapped).group(1).split()
 
     assert attrs == ['data-flag="true"', 'class="second"', 'id="first"']
+
+
+def test_replace_cellspacing_with_css() -> None:
+    html_in = '<table cellspacing="6" class="promo"><tr><td>Hi</td></tr></table>'
+    updated = script.replace_cellspacing_with_css(html_in)
+
+    assert 'cellspacing="6"' not in updated
+    assert 'style="border-spacing:6;"' in updated
+    assert '<table class="promo" style="border-spacing:6;">' in updated
