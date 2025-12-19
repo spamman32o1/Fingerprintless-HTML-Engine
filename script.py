@@ -26,11 +26,11 @@ class Opt:
     count: int
     seed: int | None
 
-    wrap_chunk_rate: float = 0.08
+    wrap_chunk_rate: float = 0.027
     chunk_len_min: int = 2
     chunk_len_max: int = 6
 
-    per_word_rate: float = 0.01
+    per_word_rate: float = 0.0033
 
     noise_divs_max: int = 4
     max_nesting: int = 4
@@ -73,6 +73,36 @@ FORBIDDEN_BRAND_RE = re.compile(
 
 def pick(rng: random.Random, xs):
     return xs[rng.randrange(len(xs))]
+
+
+def parse_synonym_lines(lines: List[str]) -> List[List[str]]:
+    groups: List[List[str]] = []
+    for line in lines:
+        parts = [part.strip() for part in line.split("|") if part.strip()]
+        if len(parts) >= 2:
+            groups.append(parts)
+    return groups
+
+
+def build_synonym_patterns(groups: List[List[str]]) -> List[Tuple[re.Pattern, List[str]]]:
+    patterns: List[Tuple[re.Pattern, List[str]]] = []
+    for group in groups:
+        escaped = sorted((re.escape(word) for word in group), key=len, reverse=True)
+        if not escaped:
+            continue
+        pattern = re.compile(rf"(?i)(?<!\w)(?:{'|'.join(escaped)})(?!\w)")
+        patterns.append((pattern, group))
+    return patterns
+
+
+def apply_synonyms(text: str, rng: random.Random, patterns: List[Tuple[re.Pattern, List[str]]]) -> str:
+    if not patterns:
+        return text
+
+    updated = text
+    for pattern, options in patterns:
+        updated = pattern.sub(lambda _: pick(rng, options), updated)
+    return updated
 
 
 def _normalized_json_order(rng: random.Random, val):
@@ -547,7 +577,12 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
     return "".join(out)
 
 
-def span_wrap_html(rng: random.Random, html_in: str, opt: Opt) -> str:
+def span_wrap_html(
+    rng: random.Random,
+    html_in: str,
+    opt: Opt,
+    synonym_patterns: List[Tuple[re.Pattern, List[str]]],
+) -> str:
     parts = TAG_SPLIT_RE.split(html_in)
     out: List[str] = []
 
@@ -582,20 +617,27 @@ def span_wrap_html(rng: random.Random, html_in: str, opt: Opt) -> str:
         if skip_depth > 0:
             out.append(part)
         else:
-            out.append(wrap_text_node_chunked(rng, part, opt))
+            with_synonyms = apply_synonyms(part, rng, synonym_patterns)
+            out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
 
     return "".join(out)
 
 
 def build_variant(
-    rng: random.Random, content_html: str, opt: Opt, idx: int, lang: str, title: str
+    rng: random.Random,
+    content_html: str,
+    opt: Opt,
+    idx: int,
+    lang: str,
+    title: str,
+    synonym_patterns: List[Tuple[re.Pattern, List[str]]],
 ) -> str:
     opt = randomize_opt_for_variant(rng, opt)
     body_css, wrapper_css = random_css(rng)
     wrapper_class = f"wrap-{uuid.uuid4().hex[:6]}"
     content_class = f"content-{uuid.uuid4().hex[:6]}"
     nested_prefix = f"w{uuid.uuid4().hex[:5]}-"
-    inner = span_wrap_html(rng, content_html, opt)
+    inner = span_wrap_html(rng, content_html, opt, synonym_patterns)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
     ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
@@ -686,6 +728,18 @@ def main() -> None:
     seed_in = input("Optional seed (blank = random): ").strip()
     seed = int(seed_in) if seed_in else None
 
+    print("Input synonym map (optional). 1 synonym per line, for example:")
+    print("hi|hello|how are you")
+    print("quick check|quick reconnect")
+    synonym_lines: List[str] = []
+    while True:
+        line = input("> ").strip()
+        if not line:
+            break
+        synonym_lines.append(line)
+    synonym_groups = parse_synonym_lines(synonym_lines)
+    synonym_patterns = build_synonym_patterns(synonym_groups)
+
     ie_noise_in = (
         input("Add randomized IE conditional comments? (default: yes) [Y/n]: ")
         .strip()
@@ -707,7 +761,7 @@ def main() -> None:
 
     for i in range(1, opt.count + 1):
         variant_title = random_title()
-        variant = build_variant(rng, content, opt, i, lang, variant_title)
+        variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
         (outdir / f"variant_{i:03d}.html").write_text(variant, encoding="utf-8")
 
     print(f"\nDone. Wrote {opt.count} files to: {outdir.resolve()}")
