@@ -728,15 +728,25 @@ def main() -> None:
     seed_in = input("Optional seed (blank = random): ").strip()
     seed = int(seed_in) if seed_in else None
 
-    print("Input synonym map (optional). 1 synonym per line, for example:")
-    print("hi|hello|how are you")
-    print("quick check|quick reconnect")
     synonym_lines: List[str] = []
     while True:
-        line = input("> ").strip()
-        if not line:
+        synonym_path = input(
+            "Optional synonym map file path (pipe-separated synonyms per line, blank to skip): "
+        ).strip().strip('"').strip("'")
+        if not synonym_path:
             break
-        synonym_lines.append(line)
+        path = Path(synonym_path)
+        try:
+            raw_synonyms = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            print(f"Could not read synonym map file '{path}': {exc}")
+            retry = input("Press Enter to skip or type a new path to retry: ").strip()
+            if retry:
+                synonym_path = retry
+                continue
+            break
+        synonym_lines = [line.strip() for line in raw_synonyms.splitlines() if line.strip()]
+        break
     synonym_groups = parse_synonym_lines(synonym_lines)
     synonym_patterns = build_synonym_patterns(synonym_groups)
 
