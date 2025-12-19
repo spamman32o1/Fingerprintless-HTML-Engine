@@ -437,6 +437,17 @@ def _normalize_table_td_attrs(tag: str) -> str:
         if attr_lower == "width":
             additions.append(("width", _css_spacing_value(value)))
             continue
+        if attr_lower == "height":
+            additions.append(("height", _css_spacing_value(value)))
+            continue
+        if attr_lower == "bgcolor":
+            additions.append(("background-color", value or ""))
+            continue
+        if attr_lower == "valign":
+            valign_value = (value or "").strip().lower()
+            if valign_value:
+                additions.append(("vertical-align", valign_value))
+            continue
         if attr_lower == "align":
             align_value = (value or "").strip().lower()
             continue
