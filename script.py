@@ -35,6 +35,8 @@ class Opt:
     max_nesting: int = 4
     title_prefix: str = "Variant"
 
+    ie_condition_randomize: bool = False
+
 
 FONT_STACKS = [
     'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
@@ -140,6 +142,59 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
         bits.append(
             f'<div aria-hidden="true" style="height:{h}px;margin:{mt}px 0 {mb}px 0;max-width:{w}px;"></div>'
         )
+    return "".join(bits)
+
+
+def random_ie_conditional_comment(rng: random.Random) -> str:
+    conditions = [
+        "IE",
+        "(IE)",
+        "!false",
+        "!(false)",
+        "IE & !false",
+    ]
+    cond = pick(rng, conditions)
+
+    # Allow capitalization/whitespace noise in the condition tokens
+    cond = cond.upper() if maybe(rng, 0.20) else cond
+    cond = cond.lower() if maybe(rng, 0.20) else cond
+
+    if maybe(rng, 0.35):
+        cond = f" {cond}"
+    if maybe(rng, 0.35):
+        cond = f"{cond} "
+
+    if_kw = "IF" if maybe(rng, 0.30) else "if"
+    endif_kw = "ENDIF" if maybe(rng, 0.30) else "endif"
+
+    open_pad = " " if maybe(rng, 0.30) else ""
+    close_pad = " " if maybe(rng, 0.30) else ""
+    bracket_ws = " " if maybe(rng, 0.40) else ""
+
+    opening = f"<!--{open_pad}[{if_kw}{bracket_ws}{cond}{bracket_ws}]>"
+    closing = f"<![{endif_kw}{close_pad}]-->"
+
+    payload = pick(
+        rng,
+        [
+            "",
+            " ",
+            "<!--noop-->",
+            "<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">",
+        ],
+    )
+    return f"{opening}{payload}{closing}"
+
+
+def ie_noise_block(rng: random.Random, enabled: bool) -> str:
+    if not enabled:
+        return ""
+
+    n_blocks = rint(rng, 1, 3)
+    bits = []
+    for _ in range(n_blocks):
+        if maybe(rng, 0.65):
+            bits.append(random_ie_conditional_comment(rng))
     return "".join(bits)
 
 
@@ -342,8 +397,11 @@ def build_variant(
     body_css, wrapper_css = random_css(rng)
     inner = span_wrap_html(rng, content_html, opt)
 
-    before = noise_divs(rng, opt.noise_divs_max)
-    after = noise_divs(rng, opt.noise_divs_max)
+    ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
+    ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
+
+    before = ie_before + noise_divs(rng, opt.noise_divs_max)
+    after = noise_divs(rng, opt.noise_divs_max) + ie_after
 
     depth = rint(rng, 1, max(1, opt.max_nesting))
     open_wrap = ""
@@ -403,7 +461,14 @@ def main() -> None:
     seed_in = input("Optional seed (blank = random): ").strip()
     seed = int(seed_in) if seed_in else None
 
-    opt = Opt(count=count, seed=seed)
+    ie_noise_in = (
+        input("Add randomized IE conditional comments? (default: no) [y/N]: ")
+        .strip()
+        .lower()
+    )
+    ie_noise = ie_noise_in in {"y", "yes", "true", "1"}
+
+    opt = Opt(count=count, seed=seed, ie_condition_randomize=ie_noise)
     raw_html = p.read_text(encoding="utf-8")
     sanitized = sanitize_input_html(raw_html)
     content = extract_body_content(sanitized)
