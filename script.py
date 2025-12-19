@@ -1287,7 +1287,7 @@ def build_variant(
         mt = rfloat(rng, 0.0, 10.0, 2)
         mb = rfloat(rng, 0.0, 10.0, 2)
         disp = pick(rng, ["block", "flow-root", "contents"])
-        nested_class = f"w{uuid.uuid4().hex[:9]}"
+        nested_class = f"{uuid.uuid4().hex[:9]}"
         open_wrap += (
             f'<div class="{nested_class}" '
             f"style=\"padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};\">"
