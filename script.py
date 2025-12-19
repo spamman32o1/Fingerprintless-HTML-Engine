@@ -182,6 +182,19 @@ def extract_body_content(html_in: str) -> str:
     return stripped.strip()
 
 
+def sanitize_input_html(html_in: str) -> str:
+    """Remove HTML comments and collapse inter-tag whitespace.
+
+    Comments are stripped using a DOTALL pattern to cover multiline blocks, and
+    whitespace between tags (e.g., newlines/indentation) is collapsed from
+    ">\s+<" to "><" to avoid introducing visible gaps while leaving inline
+    text unchanged.
+    """
+
+    without_comments = re.sub(r"<!--.*?-->", "", html_in, flags=re.DOTALL)
+    return re.sub(r">\s+<", "><", without_comments)
+
+
 def random_title() -> str:
     return f"letter-{uuid.uuid4().hex[:12]}"
 
@@ -392,8 +405,9 @@ def main() -> None:
 
     opt = Opt(count=count, seed=seed)
     raw_html = p.read_text(encoding="utf-8")
-    content = extract_body_content(raw_html)
-    lang = extract_lang(raw_html)
+    sanitized = sanitize_input_html(raw_html)
+    content = extract_body_content(sanitized)
+    lang = extract_lang(sanitized)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     outdir = Path(f"variants_{ts}")
