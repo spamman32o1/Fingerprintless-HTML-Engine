@@ -1454,9 +1454,11 @@ def prompt_int(msg: str, lo: int = 1) -> int:
         return n
 
 
-def _prompt_yes_no(message: str) -> bool:
+def _prompt_yes_no(message: str, default: bool) -> bool:
     while True:
         choice = input(message).strip().lower()
+        if choice == "":
+            return default
         if choice in {"y", "yes"}:
             return True
         if choice in {"n", "no"}:
@@ -1611,7 +1613,8 @@ def main() -> None:
     output_mode = "single"
     if len(input_paths) > 1:
         use_same = _prompt_yes_no(
-            "Multiple input files detected. Use the same output folder for all? (y/n): "
+            "Multiple input files detected. Use the same output folder for all? y/n (default y): ",
+            default=True,
         )
         output_mode = "same" if use_same else "different"
 
