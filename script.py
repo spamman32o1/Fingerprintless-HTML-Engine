@@ -162,6 +162,51 @@ def maybe(rng: random.Random, p: float) -> bool:
     return rng.random() < p
 
 
+ATTR_RE = re.compile(r"([a-zA-Z_:][-a-zA-Z0-9_:.]*)(\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s\"'>]+))?")
+
+
+def reorder_tag_attributes(rng: random.Random, tag: str) -> str:
+    """Shuffle attributes within a start/self-closing tag while preserving values."""
+
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    if not rest.strip():
+        return tag
+
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attr_text = rest.strip()
+
+    attrs: list[str] = []
+    pos = 0
+    while pos < len(attr_text):
+        while pos < len(attr_text) and attr_text[pos].isspace():
+            pos += 1
+        if pos >= len(attr_text):
+            break
+
+        m_attr = ATTR_RE.match(attr_text, pos)
+        if not m_attr:
+            return tag
+
+        attrs.append(m_attr.group(0).strip())
+        pos = m_attr.end()
+
+    if len(attrs) < 2:
+        return tag
+
+    rng.shuffle(attrs)
+    attr_str = " ".join(attrs)
+    slash = " /" if trailing_slash else ""
+    return f"<{name} {attr_str}{slash}>"
+
+
 def random_css(rng: random.Random) -> Tuple[str, str]:
     base_font = pick(rng, FONT_STACKS)
 
@@ -515,12 +560,13 @@ def span_wrap_html(rng: random.Random, html_in: str, opt: Opt) -> str:
             continue
 
         if part.startswith("<") and part.endswith(">"):
-            out.append(part)
-            m = tagname_re.match(part)
+            reordered_tag = reorder_tag_attributes(rng, part)
+            out.append(reordered_tag)
+            m = tagname_re.match(reordered_tag)
             if m:
                 name = m.group(1).lower()
-                is_close = part.startswith("</")
-                is_self_close = part.rstrip().endswith("/>")
+                is_close = reordered_tag.startswith("</")
+                is_self_close = reordered_tag.rstrip().endswith("/>")
 
                 if name in SKIP_TEXT_INSIDE and not is_self_close:
                     if not is_close:
