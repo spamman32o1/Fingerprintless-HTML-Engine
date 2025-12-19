@@ -1039,7 +1039,7 @@ def build_variant(
         "<head>"
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
-        "<meta name=\"x-apple-disable-message-reformatting\" />"
+        "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
         f"{meta_noise(rng)}"
         f"<title>{html.escape(title)}</title>"
         "<style>"

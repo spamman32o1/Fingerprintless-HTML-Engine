@@ -74,7 +74,7 @@ def test_build_variant_includes_required_meta_tags() -> None:
     assert len(meta_tags) >= 3
     assert meta_tags[0] == '<meta charset="utf-8" />'
     assert meta_tags[1] == '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-    assert meta_tags[2] == '<meta name="x-apple-disable-message-reformatting" />'
+    assert meta_tags[2] == '<meta name="x-apple-disable-message-reformatting" content="yes" />'
 
 
 def test_span_wrap_reorders_attributes() -> None:
