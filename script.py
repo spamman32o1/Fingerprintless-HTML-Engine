@@ -53,6 +53,9 @@ TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
 HTML_LANG_RE = re.compile(r"<html[^>]*?\blang\s*=\s*['\"]?([a-zA-Z0-9-]+)", re.IGNORECASE)
 BODY_RE = re.compile(r"<body[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
 TEMPLATE_SPLIT_RE = re.compile(r"(##.*?##)", re.DOTALL)
+TABLE_TAG_RE = re.compile(r"<table([^>]*)>", re.IGNORECASE)
+CELLSPACING_ATTR_RE = re.compile(r"\bcellspacing\s*=\s*([\"']?)([^\"'\s>]+)\1", re.IGNORECASE)
+STYLE_ATTR_RE = re.compile(r"\bstyle\s*=\s*([\"'])(.*?)\1", re.IGNORECASE | re.DOTALL)
 
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
@@ -122,6 +125,35 @@ def apply_synonyms(text: str, rng: random.Random, patterns: List[Tuple[re.Patter
     for pattern, options in patterns:
         updated = pattern.sub(lambda _: pick(rng, options), updated)
     return updated
+
+
+def replace_cellspacing_with_css(html_text: str) -> str:
+    def replace_table(match: re.Match[str]) -> str:
+        attrs = match.group(1)
+        spacing_match = CELLSPACING_ATTR_RE.search(attrs)
+        if not spacing_match:
+            return match.group(0)
+
+        spacing_value = spacing_match.group(2)
+        attrs_clean = CELLSPACING_ATTR_RE.sub("", attrs)
+        attrs_clean = re.sub(r"\s{2,}", " ", attrs_clean).strip()
+
+        border_spacing = f"border-spacing:{spacing_value};"
+        style_match = STYLE_ATTR_RE.search(attrs_clean)
+        if style_match:
+            quote = style_match.group(1)
+            style_value = style_match.group(2).strip()
+            if style_value and not style_value.rstrip().endswith(";"):
+                style_value = f"{style_value};"
+            style_value = f"{style_value}{border_spacing}"
+            new_style = f'style={quote}{style_value}{quote}'
+            attrs_clean = attrs_clean[: style_match.start()] + new_style + attrs_clean[style_match.end() :]
+        else:
+            attrs_clean = f'{attrs_clean} style="{border_spacing}"'.strip()
+
+        return f"<table{(' ' + attrs_clean) if attrs_clean else ''}>"
+
+    return TABLE_TAG_RE.sub(replace_table, html_text)
 
 
 def _normalized_json_order(rng: random.Random, val):
@@ -763,6 +795,7 @@ def build_variant(
     synonym_patterns: List[Tuple[re.Pattern, List[str]]],
 ) -> str:
     opt = randomize_opt_for_variant(rng, opt)
+    content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css = random_css(rng)
     wrapper_class = f"wrap-{uuid.uuid4().hex[:6]}"
     content_class = f"content-{uuid.uuid4().hex[:6]}"
