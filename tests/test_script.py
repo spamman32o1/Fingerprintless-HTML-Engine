@@ -75,3 +75,23 @@ def test_build_variant_includes_required_meta_tags() -> None:
     assert meta_tags[0] == '<meta charset="utf-8" />'
     assert meta_tags[1] == '<meta name="viewport" content="width=device-width, initial-scale=1" />'
     assert meta_tags[2] == '<meta name="x-apple-disable-message-reformatting" />'
+
+
+def test_span_wrap_reorders_attributes() -> None:
+    rng = random.Random(21)
+    opt = script.Opt(
+        count=1,
+        seed=0,
+        wrap_chunk_rate=0.0,
+        chunk_len_min=1,
+        chunk_len_max=1,
+        per_word_rate=0.0,
+        noise_divs_max=0,
+    )
+
+    html_in = '<p id="first" class="second" data-flag="true">Hello</p>'
+    wrapped = script.span_wrap_html(rng, html_in, opt)
+
+    attrs = re.search(r"<p ([^>]+)>", wrapped).group(1).split()
+
+    assert attrs == ['data-flag="true"', 'class="second"', 'id="first"']
