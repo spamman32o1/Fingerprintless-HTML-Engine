@@ -134,8 +134,24 @@ def test_normalize_table_and_cell_attrs_to_styles() -> None:
     assert "border:1px solid;" in updated
     assert "padding:4px;" in updated
     assert "width:600px;" in updated
-    assert "text-align:center;" in updated
+    assert "margin-left:auto;" in updated
+    assert "margin-right:auto;" in updated
     assert "border:2px solid;" in updated
     assert "padding:3px;" in updated
     assert "width:200px;" in updated
     assert "text-align:right;" in updated
+
+
+def test_normalize_table_align_left_right() -> None:
+    html_in = (
+        '<table align="left"><tr><td>Left</td></tr></table>'
+        '<table align="right"><tr><td>Right</td></tr></table>'
+    )
+    updated = script.normalize_input_html(html_in)
+
+    assert 'align="left"' not in updated
+    assert 'align="right"' not in updated
+    assert "margin-left:0;" in updated
+    assert "margin-right:auto;" in updated
+    assert "margin-left:auto;" in updated
+    assert "margin-right:0;" in updated

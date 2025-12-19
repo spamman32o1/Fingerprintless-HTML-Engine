@@ -443,7 +443,18 @@ def _normalize_table_td_attrs(tag: str) -> str:
         updated_attrs.append(raw)
 
     if align_value:
-        additions.append(("text-align", align_value))
+        if name.lower() == "table":
+            if align_value == "center":
+                additions.append(("margin-left", "auto"))
+                additions.append(("margin-right", "auto"))
+            elif align_value == "left":
+                additions.append(("margin-left", "0"))
+                additions.append(("margin-right", "auto"))
+            elif align_value == "right":
+                additions.append(("margin-left", "auto"))
+                additions.append(("margin-right", "0"))
+        else:
+            additions.append(("text-align", align_value))
 
     if not additions and style_value is None and len(updated_attrs) == len(attrs):
         return tag
