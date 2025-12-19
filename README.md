@@ -13,7 +13,7 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 - 🕵️ **IE Conditional Noise**: Adds conditional comment blocks to mimic historical email/client HTML quirks.
 - 🧪 **Synonym Swaps**: Optionally applies synonym maps to create **subtle** textual variance.
 - 🧼 **Sanitization & Minification**: Normalizes input HTML and outputs compressed, efficient variants.
-- 🔐 **Deterministic Seeds**: Repeatable runs using a specified random seed for **reproducible** results.
+- 🎲 **Natural Randomization**: Each run uses fresh randomness to keep every output uniquely varied.
 
 ## 🛠️ Usage
 1. Run the script:

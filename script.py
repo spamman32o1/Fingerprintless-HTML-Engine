@@ -16,7 +16,6 @@ from typing import List, Tuple
 @dataclass
 class Opt:
     count: int
-    seed: int | None
 
     wrap_chunk_rate: float = 0.027
     chunk_len_min: int = 2
@@ -636,7 +635,6 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
 
     return Opt(
         count=opt.count,
-        seed=opt.seed,
         wrap_chunk_rate=_clamp_rate(opt.wrap_chunk_rate * wrap_factor),
         chunk_len_min=chunk_len_min,
         chunk_len_max=chunk_len_max,
@@ -1483,7 +1481,6 @@ def main() -> None:
         default="utf-8",
         help="Input HTML encoding (default: utf-8; on decode error retries latin-1 then windows-1252).",
     )
-    parser.add_argument("--seed", type=int, help="Random seed (default: random).")
     parser.add_argument(
         "--no-ie-conditional-comments",
         action="store_false",
@@ -1507,7 +1504,6 @@ def main() -> None:
     input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
     count = prompt_int("How many variants? ", lo=1)
-    seed = args.seed
 
     synonym_lines: List[str] = []
     while True:
@@ -1533,7 +1529,6 @@ def main() -> None:
 
     opt = Opt(
         count=count,
-        seed=seed,
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
     )
@@ -1546,7 +1541,7 @@ def main() -> None:
     outdir = Path(f"variants_{ts}")
     outdir.mkdir(parents=True, exist_ok=True)
 
-    rng = random.Random(opt.seed)
+    rng = random.Random()
 
     for i in range(1, opt.count + 1):
         variant_title = random_title()
