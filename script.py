@@ -643,6 +643,68 @@ def sanitize_input_html(html_in: str) -> str:
     return re.sub(r">\s+<", "><", without_comments)
 
 
+def minify_output_html(html_text: str) -> str:
+    parts = TAG_SPLIT_RE.split(html_text)
+    out: List[str] = []
+    tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
+    skip_stack: List[tuple[str, bool]] = []
+    jsonld_type_re = re.compile(r"\btype\s*=\s*(['\"]?)application/ld\+json\1", re.IGNORECASE)
+
+    for part in parts:
+        if not part:
+            continue
+
+        if part.startswith("<") and part.endswith(">"):
+            out.append(part)
+            m = tagname_re.match(part)
+            if m:
+                name = m.group(1).lower()
+                is_close = part.startswith("</")
+                is_self_close = part.rstrip().endswith("/>")
+                if name in SKIP_TEXT_INSIDE and not is_self_close:
+                    if not is_close:
+                        is_jsonld = name == "script" and bool(jsonld_type_re.search(part))
+                        skip_stack.append((name, is_jsonld))
+                    elif skip_stack and skip_stack[-1][0] == name:
+                        skip_stack.pop()
+            continue
+
+        if skip_stack:
+            name, is_jsonld = skip_stack[-1]
+            if name in ("script", "style"):
+                segments = TEMPLATE_SPLIT_RE.split(part)
+                for segment in segments:
+                    if not segment:
+                        continue
+                    if TEMPLATE_SPLIT_RE.fullmatch(segment):
+                        out.append(segment)
+                        continue
+                    if name == "script" and is_jsonld:
+                        out.append(segment.strip())
+                    else:
+                        collapsed = re.sub(r"\s+", " ", segment).strip()
+                        if collapsed:
+                            out.append(collapsed)
+            else:
+                out.append(part)
+            continue
+
+        segments = TEMPLATE_SPLIT_RE.split(part)
+        for segment in segments:
+            if not segment:
+                continue
+            if TEMPLATE_SPLIT_RE.fullmatch(segment):
+                out.append(segment)
+                continue
+            collapsed = re.sub(r"\s+", " ", segment)
+            if collapsed.strip():
+                out.append(collapsed)
+
+    minified = "".join(out)
+    minified = re.sub(r">\s+<", "><", minified)
+    return minified.strip()
+
+
 def random_title() -> str:
     return f"letter-{uuid.uuid4().hex[:12]}"
 
@@ -961,7 +1023,7 @@ def build_variant(
         close_wrap = "</div>" + close_wrap
 
     # No template whitespace around inner
-    return (
+    rendered = (
         "<!doctype html>"
         f"<html lang=\"{html.escape(lang, quote=True)}\">"
         "<head>"
@@ -987,6 +1049,7 @@ def build_variant(
         "</body>"
         "</html>"
     )
+    return minify_output_html(rendered)
 
 
 def prompt_int(msg: str, lo: int = 1) -> int:
