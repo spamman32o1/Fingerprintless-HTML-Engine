@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import json
+import os
 import random
 import re
 import uuid
@@ -1474,6 +1476,35 @@ def read_text_with_fallback(path: Path, encoding: str) -> str:
         ) from exc
 
 
+def parse_input_paths(raw_input: str) -> list[Path]:
+    if not raw_input:
+        return []
+    if "," in raw_input:
+        parts = [part.strip().strip('"').strip("'") for part in raw_input.split(",")]
+        return [Path(part) for part in parts if part]
+    return [Path(raw_input.strip().strip('"').strip("'"))]
+
+
+def select_input_files_windows() -> list[Path]:
+    if os.name != "nt":
+        return []
+    if importlib.util.find_spec("tkinter") is None:
+        return []
+
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.update()
+    files = filedialog.askopenfilenames(
+        title="Select HTML files",
+        filetypes=[("HTML files", "*.html *.htm"), ("All files", "*.*")],
+    )
+    root.destroy()
+    return [Path(file) for file in files] if files else []
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
@@ -1496,10 +1527,16 @@ def main() -> None:
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
-    in_path = input("Input HTML file path: ").strip().strip('"').strip("'")
-    p = Path(in_path)
-    if not p.exists() or not p.is_file():
-        raise SystemExit(f"File not found: {p}")
+    input_paths = select_input_files_windows()
+    if not input_paths:
+        in_paths = input("Input HTML file path(s) (comma-separated for multiple): ").strip()
+        input_paths = parse_input_paths(in_paths)
+    if not input_paths:
+        raise SystemExit("No input files provided.")
+
+    for path in input_paths:
+        if not path.exists() or not path.is_file():
+            raise SystemExit(f"File not found: {path}")
 
     input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
@@ -1532,23 +1569,39 @@ def main() -> None:
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
     )
-    raw_html = read_text_with_fallback(p, input_encoding)
-    sanitized = sanitize_input_html(raw_html)
-    content = extract_body_content(sanitized)
-    lang = extract_lang(sanitized)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    outdir = Path(f"variants_{ts}")
-    outdir.mkdir(parents=True, exist_ok=True)
+    outdir_root = Path(f"variants_{ts}")
+    outdir_root.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random()
 
-    for i in range(1, opt.count + 1):
-        variant_title = random_title()
-        variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
-        (outdir / f"variant_{i:03d}.html").write_text(variant, encoding="utf-8")
+    used_dirs: set[str] = set()
+    for index, input_path in enumerate(input_paths, start=1):
+        raw_html = read_text_with_fallback(input_path, input_encoding)
+        sanitized = sanitize_input_html(raw_html)
+        content = extract_body_content(sanitized)
+        lang = extract_lang(sanitized)
 
-    print(f"\nDone. Wrote {opt.count} files to: {outdir.resolve()}")
+        if len(input_paths) == 1:
+            outdir = outdir_root
+        else:
+            base_name = f"{input_path.stem}_variants"
+            candidate = base_name
+            counter = 1
+            while candidate in used_dirs:
+                candidate = f"{base_name}_{counter}"
+                counter += 1
+            used_dirs.add(candidate)
+            outdir = outdir_root / candidate
+            outdir.mkdir(parents=True, exist_ok=True)
+
+        for i in range(1, opt.count + 1):
+            variant_title = random_title()
+            variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
+            (outdir / f"variant_{i:03d}.html").write_text(variant, encoding="utf-8")
+
+        print(f"\nDone. Wrote {opt.count} files to: {outdir.resolve()}")
 
 
 if __name__ == "__main__":
