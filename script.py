@@ -409,17 +409,19 @@ def random_css(rng: random.Random) -> Tuple[str, str]:
     text_color = pick(rng, TEXT_COLORS)
     bg_color = pick(rng, BG_COLORS)
 
-    body_css = f"""
-      margin: 0;
-      background: {bg_color};
-      color: {text_color};
-      font-family: {base_font};
-      font-size: {font_size}px;
-      line-height: {line_height};
-      letter-spacing: {letter_spacing}em;
-      word-spacing: {word_spacing}em;
-      opacity: {opacity};
-    """.strip()
+    body_css = " ".join(
+        [
+            "margin: 0;",
+            f"background: {bg_color};",
+            f"color: {text_color};",
+            f"font-family: {base_font};",
+            f"font-size: {font_size}px;",
+            f"line-height: {line_height};",
+            f"letter-spacing: {letter_spacing}em;",
+            f"word-spacing: {word_spacing}em;",
+            f"opacity: {opacity};",
+        ]
+    )
 
     border_rad = rfloat(rng, 12.0, 20.0, 2)
     border = "1px solid rgba(127,127,127,0.22)" if maybe(rng, 0.35) else "none"
@@ -428,23 +430,36 @@ def random_css(rng: random.Random) -> Tuple[str, str]:
     layout_mode = pick(rng, ["block", "flow-root", "flex", "grid"])
     gap = rfloat(rng, 6.0, 14.0, 2)
     if layout_mode == "flex":
-        extra = f"display:flex; flex-direction:column; gap:{gap}px;"
+        extra = " ".join(
+            [
+                "display:flex;",
+                "flex-direction:column;",
+                f"gap:{gap}px;",
+            ]
+        )
     elif layout_mode == "grid":
-        extra = f"display:grid; gap:{gap}px;"
+        extra = " ".join(
+            [
+                "display:grid;",
+                f"gap:{gap}px;",
+            ]
+        )
     else:
         extra = f"display:{layout_mode};"
 
-    wrapper_css = f"""
-      max-width: {max_w}px;
-      padding: {pad}px;
-      margin: {margin_top}px auto;
-      border-radius: {border_rad}px;
-      border: {border};
-      box-shadow: {shadow};
-      {extra}
-      transform: rotate({rot}deg) skewX({skew}deg) scale({scale});
-      transform-origin: top left;
-    """.strip()
+    wrapper_css = " ".join(
+        [
+            f"max-width: {max_w}px;",
+            f"padding: {pad}px;",
+            f"margin: {margin_top}px auto;",
+            f"border-radius: {border_rad}px;",
+            f"border: {border};",
+            f"box-shadow: {shadow};",
+            extra,
+            f"transform: rotate({rot}deg) skewX({skew}deg) scale({scale});",
+            "transform-origin: top left;",
+        ]
+    )
 
     return body_css, wrapper_css
 
