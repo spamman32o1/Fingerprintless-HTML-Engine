@@ -1490,6 +1490,17 @@ def _pick_windows_files() -> list[Path]:
     return [Path(path) for path in paths]
 
 
+def _flush_windows_stdin() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import msvcrt
+    except ImportError:
+        return
+    while msvcrt.kbhit():
+        msvcrt.getwch()
+
+
 def _collect_input_files() -> list[Path]:
     while True:
         if os.name == "nt":
@@ -1499,6 +1510,7 @@ def _collect_input_files() -> list[Path]:
             raw = raw.strip()
             if not raw:
                 paths = _pick_windows_files()
+                _flush_windows_stdin()
             else:
                 paths = _parse_input_paths(raw)
         else:
