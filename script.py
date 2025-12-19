@@ -1290,19 +1290,6 @@ def build_variant(
     before = ie_before + noise_divs(rng, opt.noise_divs_max)
     after = noise_divs(rng, opt.noise_divs_max) + ie_after
 
-    outer_table_open = (
-        '<table role="presentation" class="layout-table" '
-        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
-        "<tr><td>"
-    )
-    outer_table_close = "</td></tr></table>"
-
-    table_fallback_open = (
-        "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
-        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
-    )
-    table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
-
     depth = rint(rng, 1, max(1, opt.max_nesting))
     open_wrap = ""
     close_wrap = ""
@@ -1318,8 +1305,40 @@ def build_variant(
         )
         close_wrap = "</div>" + close_wrap
 
-    # No template whitespace around inner
-    rendered = (
+    rendered = build_layout_template(
+        rng=rng,
+        lang=lang,
+        title=title,
+        inner=inner,
+        wrapper_class=wrapper_class,
+        content_class=content_class,
+        before=before,
+        after=after,
+        open_wrap=open_wrap,
+        close_wrap=close_wrap,
+        body_css=body_css,
+        wrapper_css=wrapper_css,
+        jsonld_scripts=jsonld_scripts,
+    )
+    return minify_output_html(rendered)
+
+
+def build_layout_template(
+    rng: random.Random,
+    lang: str,
+    title: str,
+    inner: str,
+    wrapper_class: str,
+    content_class: str,
+    before: str,
+    after: str,
+    open_wrap: str,
+    close_wrap: str,
+    body_css: str,
+    wrapper_css: str,
+    jsonld_scripts: str,
+) -> str:
+    head_html = (
         "<!doctype html>"
         f"<html lang=\"{html.escape(lang, quote=True)}\">"
         "<head>"
@@ -1334,18 +1353,101 @@ def build_variant(
         "</style>"
         f"{jsonld_scripts}"
         "</head>"
-        "<body>"
-        f"{outer_table_open}"
-        f"{table_fallback_open}"
-        f"<div class=\"{wrapper_class}\">"
-        f"{open_wrap}{before}<div class=\"{content_class}\">{inner}</div>{after}{close_wrap}"
-        "</div>"
-        f"{table_fallback_close}"
-        f"{outer_table_close}"
-        "</body>"
-        "</html>"
     )
-    return minify_output_html(rendered)
+
+    outer_table_open = (
+        '<table role="presentation" class="layout-table" '
+        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
+        "<tr><td>"
+    )
+    outer_table_close = "</td></tr></table>"
+    inner_table_open = (
+        '<table role="presentation" class="inner-table" '
+        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
+        "<tr><td>"
+    )
+    inner_table_close = "</td></tr></table>"
+
+    table_fallback_open = (
+        "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
+        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
+    )
+    table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
+
+    placement = pick(rng, ["inner", "body-outside", "mixed-before", "mixed-after"])
+    before_body = ""
+    after_body = ""
+    before_inner = ""
+    after_inner = ""
+    if placement == "inner":
+        before_inner = before
+        after_inner = after
+    elif placement == "body-outside":
+        before_body = before
+        after_body = after
+    elif placement == "mixed-before":
+        before_body = before
+        after_inner = after
+    else:
+        before_inner = before
+        after_body = after
+
+    content_inner = f"{open_wrap}{before_inner}<div class=\"{content_class}\">{inner}</div>{after_inner}{close_wrap}"
+
+    def build_wrapper(content_html: str) -> str:
+        wrapper_open = f"<div class=\"{wrapper_class}\">"
+        wrapper_close = "</div>"
+        if maybe(rng, 0.45):
+            wrap_tag = pick(rng, ["section", "div"])
+            role = ""
+            if wrap_tag == "div" and maybe(rng, 0.5):
+                role = ' role="presentation"'
+            wrapper_open += f"<{wrap_tag}{role}>"
+            wrapper_close = f"</{wrap_tag}>{wrapper_close}"
+        return f"{wrapper_open}{content_html}{wrapper_close}"
+
+    outer_layer_open = ""
+    outer_layer_close = ""
+    if maybe(rng, 0.35):
+        outer_tag = pick(rng, ["section", "div"])
+        role = ""
+        if outer_tag == "div" and maybe(rng, 0.5):
+            role = ' role="presentation"'
+        outer_layer_open = f"<{outer_tag}{role}>"
+        outer_layer_close = f"</{outer_tag}>"
+
+    wrapper_default = build_wrapper(content_inner)
+    wrapper_with_inner_table = build_wrapper(f"{inner_table_open}{content_inner}{inner_table_close}")
+    wrapper_with_commented_table = build_wrapper(
+        f"{table_fallback_open}{inner_table_open}{content_inner}{inner_table_close}{table_fallback_close}"
+    )
+
+    templates = [
+        lambda: (
+            f"{head_html}<body>{before_body}{outer_table_open}{table_fallback_open}"
+            f"{outer_layer_open}{wrapper_default}{outer_layer_close}{table_fallback_close}"
+            f"{outer_table_close}{after_body}</body></html>"
+        ),
+        lambda: (
+            f"{head_html}<body>{before_body}{outer_layer_open}{wrapper_default}"
+            f"{outer_layer_close}{after_body}</body></html>"
+        ),
+        lambda: (
+            f"{head_html}<body>{before_body}{outer_table_open}{outer_layer_open}"
+            f"{wrapper_with_inner_table}{outer_layer_close}{outer_table_close}{after_body}</body></html>"
+        ),
+        lambda: (
+            f"{head_html}<body>{before_body}{outer_layer_open}{wrapper_with_commented_table}"
+            f"{outer_layer_close}{after_body}</body></html>"
+        ),
+        lambda: (
+            f"{head_html}<body>{before_body}{table_fallback_open}{outer_table_open}{outer_layer_open}"
+            f"{wrapper_default}{outer_layer_close}{outer_table_close}{table_fallback_close}"
+            f"{after_body}</body></html>"
+        ),
+    ]
+
+    return pick(rng, templates)()
 
 
 def prompt_int(msg: str, lo: int = 1) -> int:
