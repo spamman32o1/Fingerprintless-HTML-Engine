@@ -915,6 +915,7 @@ def span_wrap_html(
     html_in: str,
     opt: Opt,
     synonym_patterns: List[Tuple[re.Pattern, List[str]]] | None = None,
+    minify_output: bool = False,
 ) -> str:
     if synonym_patterns is None:
         synonym_patterns = []
@@ -924,6 +925,29 @@ def span_wrap_html(
     skip_depth = 0
     skip_tag_stack: List[str] = []
     tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
+
+    def normalize_anchor_text(text: str) -> str:
+        segments = TEMPLATE_SPLIT_RE.split(text)
+        normalized_segments: List[str] = []
+        for segment in segments:
+            if not segment:
+                continue
+            if TEMPLATE_SPLIT_RE.fullmatch(segment):
+                normalized_segments.append(segment)
+                continue
+            normalized = normalize_text_whitespace(segment)
+            if not normalized:
+                if segment.strip() == "":
+                    normalized_segments.append(" ")
+                continue
+            leading_space = bool(re.match(r"\s", segment))
+            trailing_space = bool(re.search(r"\s$", segment))
+            if leading_space:
+                normalized = f" {normalized}"
+            if trailing_space:
+                normalized = f"{normalized} "
+            normalized_segments.append(normalized)
+        return "".join(normalized_segments)
 
     for part in parts:
         if not part:
@@ -951,7 +975,10 @@ def span_wrap_html(
 
         # text node
         if skip_depth > 0:
-            out.append(part)
+            if minify_output and skip_tag_stack and skip_tag_stack[-1] == "a":
+                out.append(normalize_anchor_text(part))
+            else:
+                out.append(part)
         else:
             segments = TEMPLATE_SPLIT_RE.split(part)
             for segment in segments:
