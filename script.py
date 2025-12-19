@@ -37,6 +37,7 @@ class Opt:
     title_prefix: str = "Variant"
 
     ie_condition_randomize: bool = True
+    structure_randomize: bool = True
 
 
 FONT_STACKS = [
@@ -54,6 +55,7 @@ BODY_RE = re.compile(r"<body[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
 
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
+SAFE_WRAPPER_TAGS = {"div", "section", "span"}
 
 JSONLD_MUTATION_POOL = [
     {},
@@ -317,6 +319,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         max_nesting=opt.max_nesting,
         title_prefix=opt.title_prefix,
         ie_condition_randomize=opt.ie_condition_randomize,
+        structure_randomize=opt.structure_randomize,
     )
 
 
@@ -577,6 +580,109 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
     return "".join(out)
 
 
+@dataclass
+class _HtmlNode:
+    tag: str | None
+    open_tag: str
+    close_tag: str | None
+    children: list["_HtmlNode"]
+    text: str
+    self_closing: bool = False
+
+    def render(self) -> str:
+        if self.tag is None:
+            return self.text
+        inner = "".join(child.render() for child in self.children)
+        close = "" if self.self_closing else (self.close_tag or "")
+        return f"{self.open_tag}{inner}{close}"
+
+
+def _tag_name(tag_text: str) -> str | None:
+    m = re.match(r"^</?\s*([a-zA-Z0-9:_-]+)", tag_text)
+    if not m:
+        return None
+    return m.group(1).lower()
+
+
+def _is_safe_wrapper(tag_text: str, tag_name: str | None) -> bool:
+    if not tag_name or tag_name not in SAFE_WRAPPER_TAGS:
+        return False
+    m = re.match(r"^<\s*[a-zA-Z0-9:_-]+([^>]*)>$", tag_text)
+    if not m:
+        return False
+    rest = m.group(1)
+    return rest.strip() in {"", "/"}
+
+
+def _parse_html_nodes(html_in: str) -> _HtmlNode:
+    parts = TAG_SPLIT_RE.split(html_in)
+    root = _HtmlNode(tag="__root__", open_tag="", close_tag="", children=[], text="")
+    stack = [root]
+
+    for part in parts:
+        if not part:
+            continue
+
+        if part.startswith("<") and part.endswith(">"):
+            if part.startswith("</"):
+                name = _tag_name(part)
+                if name and len(stack) > 1 and stack[-1].tag == name:
+                    stack[-1].close_tag = part
+                    stack.pop()
+                else:
+                    stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            if part.startswith("<!") or part.startswith("<?"):
+                stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            name = _tag_name(part)
+            if not name:
+                stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            is_self_closing = part.rstrip().endswith("/>")
+            node = _HtmlNode(tag=name, open_tag=part, close_tag=None, children=[], text="", self_closing=is_self_closing)
+            stack[-1].children.append(node)
+            if not is_self_closing:
+                stack.append(node)
+            continue
+
+        stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+
+    return root
+
+
+def _shuffle_safe_siblings(rng: random.Random, node: _HtmlNode) -> None:
+    if node.tag in SKIP_TEXT_INSIDE:
+        return
+
+    shuffle_indices = [
+        idx
+        for idx, child in enumerate(node.children)
+        if child.tag is not None and _is_safe_wrapper(child.open_tag, child.tag)
+    ]
+    if len(shuffle_indices) > 1:
+        shuffled = [node.children[idx] for idx in shuffle_indices]
+        rng.shuffle(shuffled)
+        for idx, child in zip(shuffle_indices, shuffled):
+            node.children[idx] = child
+
+    for child in node.children:
+        if child.tag is not None:
+            _shuffle_safe_siblings(rng, child)
+
+
+def randomize_structure(rng: random.Random, content_html: str, enabled: bool) -> str:
+    if not enabled:
+        return content_html
+
+    root = _parse_html_nodes(content_html)
+    _shuffle_safe_siblings(rng, root)
+    return "".join(child.render() for child in root.children)
+
+
 def span_wrap_html(
     rng: random.Random,
     html_in: str,
@@ -637,7 +743,8 @@ def build_variant(
     wrapper_class = f"wrap-{uuid.uuid4().hex[:6]}"
     content_class = f"content-{uuid.uuid4().hex[:6]}"
     nested_prefix = f"w{uuid.uuid4().hex[:5]}-"
-    inner = span_wrap_html(rng, content_html, opt, synonym_patterns)
+    structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
+    inner = span_wrap_html(rng, structured_html, opt, synonym_patterns)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
     ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
@@ -757,7 +864,19 @@ def main() -> None:
     )
     ie_noise = True if ie_noise_in == "" else ie_noise_in in {"y", "yes", "true", "1"}
 
-    opt = Opt(count=count, seed=seed, ie_condition_randomize=ie_noise)
+    structure_in = (
+        input("Randomize safe wrapper structure? (default: yes) [Y/n]: ").strip().lower()
+    )
+    structure_randomize = (
+        True if structure_in == "" else structure_in in {"y", "yes", "true", "1"}
+    )
+
+    opt = Opt(
+        count=count,
+        seed=seed,
+        ie_condition_randomize=ie_noise,
+        structure_randomize=structure_randomize,
+    )
     raw_html = p.read_text(encoding="utf-8")
     sanitized = sanitize_input_html(raw_html)
     content = extract_body_content(sanitized)
