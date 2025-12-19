@@ -1269,6 +1269,7 @@ def build_variant(
     body_css, wrapper_css = random_css(rng)
     wrapper_class = f"wrap-{uuid.uuid4().hex[:6]}"
     content_class = f"content-{uuid.uuid4().hex[:6]}"
+    nested_prefix = f"w{uuid.uuid4().hex[:5]}-"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
     inner = span_wrap_html(rng, structured_html, opt, synonym_patterns)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
@@ -1287,7 +1288,7 @@ def build_variant(
         mt = rfloat(rng, 0.0, 10.0, 2)
         mb = rfloat(rng, 0.0, 10.0, 2)
         disp = pick(rng, ["block", "flow-root", "contents"])
-        nested_class = f"w{uuid.uuid4().hex[:9]}"
+        nested_class = f"{nested_prefix}{uuid.uuid4().hex[:4]}"
         open_wrap += (
             f'<div class="{nested_class}" '
             f"style=\"padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};\">"
