@@ -647,7 +647,8 @@ def minify_output_html(html_text: str) -> str:
     parts = TAG_SPLIT_RE.split(html_text)
     out: List[str] = []
     tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
-    skip_stack: List[str] = []
+    skip_stack: List[tuple[str, bool]] = []
+    jsonld_type_re = re.compile(r"\btype\s*=\s*(['\"]?)application/ld\+json\1", re.IGNORECASE)
 
     for part in parts:
         if not part:
@@ -662,13 +663,30 @@ def minify_output_html(html_text: str) -> str:
                 is_self_close = part.rstrip().endswith("/>")
                 if name in SKIP_TEXT_INSIDE and not is_self_close:
                     if not is_close:
-                        skip_stack.append(name)
-                    elif skip_stack and skip_stack[-1] == name:
+                        is_jsonld = name == "script" and bool(jsonld_type_re.search(part))
+                        skip_stack.append((name, is_jsonld))
+                    elif skip_stack and skip_stack[-1][0] == name:
                         skip_stack.pop()
             continue
 
         if skip_stack:
-            out.append(part)
+            name, is_jsonld = skip_stack[-1]
+            if name in ("script", "style"):
+                segments = TEMPLATE_SPLIT_RE.split(part)
+                for segment in segments:
+                    if not segment:
+                        continue
+                    if TEMPLATE_SPLIT_RE.fullmatch(segment):
+                        out.append(segment)
+                        continue
+                    if name == "script" and is_jsonld:
+                        out.append(segment.strip())
+                    else:
+                        collapsed = re.sub(r"\s+", " ", segment).strip()
+                        if collapsed:
+                            out.append(collapsed)
+            else:
+                out.append(part)
             continue
 
         segments = TEMPLATE_SPLIT_RE.split(part)
@@ -679,10 +697,11 @@ def minify_output_html(html_text: str) -> str:
                 out.append(segment)
                 continue
             collapsed = re.sub(r"\s+", " ", segment)
-            if collapsed:
+            if collapsed.strip():
                 out.append(collapsed)
 
     minified = "".join(out)
+    minified = re.sub(r">\s+<", "><", minified)
     return minified.strip()
 
 
