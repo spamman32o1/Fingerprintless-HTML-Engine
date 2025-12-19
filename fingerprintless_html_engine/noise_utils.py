@@ -79,6 +79,20 @@ META_NOISE_CANDIDATES = [
     ("generator", ["fp-less-engine", "static-maker", "markup-crafter"]),
     ("author", ["layout", "markup", "builder", "compose"]),
     ("keywords", ["letters", "content", "layout", "wrapper", "document"]),
+    ("description", ["Document shell", "Layout wrapper", "Content frame", "Minimal placeholder"]),
+    ("theme-color", ["#f8f8f8", "#ffffff", "#111111", "#f3f3f3"]),
+    ("referrer", ["no-referrer", "origin", "same-origin", "strict-origin-when-cross-origin"]),
+    ("robots", ["index, follow", "noindex, nofollow", "noarchive", "nosnippet"]),
+    ("color-scheme", ["light dark", "only light", "light", "dark"]),
+    (
+        "viewport",
+        [
+            "width=device-width, initial-scale=1",
+            "width=device-width,initial-scale=1,viewport-fit=cover",
+            "initial-scale=1.0, width=device-width",
+            "width=device-width, initial-scale=1, maximum-scale=1",
+        ],
+    ),
     ("rating", ["General", "Safe", "Clean"]),
     ("distribution", ["Global", "Worldwide", "Public"]),
     ("format-detection", ["telephone=no", "date=no", "email=no"]),
@@ -87,24 +101,91 @@ META_NOISE_CANDIDATES = [
     ("data-layout-step", ["draft", "pass", "final", "stable"]),
 ]
 
+HTTP_EQUIV_NOISE_CANDIDATES = [
+    ("content-language", ["en", "en-US", "en-GB", "fr", "de"]),
+    ("cache-control", ["no-cache", "max-age=0", "no-store"]),
+    ("pragma", ["no-cache"]),
+    ("expires", ["0", "Mon, 01 Jan 1990 00:00:00 GMT"]),
+    ("x-ua-compatible", ["IE=edge"]),
+    ("x-dns-prefetch-control", ["on", "off"]),
+    ("default-style", ["base", "clean", "main"]),
+    ("content-type", ["text/html; charset=utf-8", "text/html; charset=iso-8859-1"]),
+    ("refresh", ["30", "120"]),
+]
+
+PROPERTY_NOISE_CANDIDATES = [
+    ("og:type", ["document", "article", "page", "website"]),
+    ("og:locale", ["en_US", "en_GB", "fr_FR", "de_DE"]),
+    ("og:section", ["layout", "content", "shell", "frame"]),
+    ("og:site_name", ["Document Shell", "Layout Frame", "Content Panel"]),
+    ("social:card", ["summary", "summary_large", "compact"]),
+    ("social:title", ["Document shell", "Layout wrapper", "Content frame"]),
+    ("social:description", ["Minimal placeholder", "Layout shell", "Content summary"]),
+]
+
+
+def _randomize_case(rng: random.Random, text: str) -> str:
+    if maybe(rng, 0.12):
+        return text.upper()
+    if maybe(rng, 0.12):
+        return text.lower()
+    if maybe(rng, 0.08):
+        return text.title()
+    if maybe(rng, 0.10):
+        return "".join(ch.upper() if maybe(rng, 0.5) else ch.lower() for ch in text)
+    return text
+
+
+def _format_meta_content(rng: random.Random, content: str) -> str:
+    value = content
+    tokens = value.replace(",", " ").replace(";", " ").split()
+    if len(tokens) > 1 and maybe(rng, 0.35):
+        sep = pick(rng, [", ", ",", "; ", ";"])
+        value = sep.join(tokens)
+    if maybe(rng, 0.18):
+        value = value.replace("=", " = ")
+    if maybe(rng, 0.20):
+        value = value.replace(",", " , ").replace(";", " ; ")
+        value = " ".join(value.split())
+    value = _randomize_case(rng, value)
+    if maybe(rng, 0.20):
+        value = f" {value}"
+    if maybe(rng, 0.20):
+        value = f"{value} "
+    return value
+
 
 def meta_noise(rng: random.Random) -> str:
     n = rint(rng, 2, 6)
     tags: list[str] = []
-    seen_names: set[str] = set()
+    seen_names: set[tuple[str, str]] = set()
 
     for _ in range(n):
-        name, values = pick(rng, META_NOISE_CANDIDATES)
-        if name in seen_names and maybe(rng, 0.55):
+        use_property = maybe(rng, 0.22)
+        use_http_equiv = not use_property and maybe(rng, 0.18)
+        if use_property:
+            attr_name = "property"
+            name, values = pick(rng, PROPERTY_NOISE_CANDIDATES)
+        elif use_http_equiv:
+            attr_name = "http-equiv"
+            name, values = pick(rng, HTTP_EQUIV_NOISE_CANDIDATES)
+        else:
+            attr_name = "name"
+            name, values = pick(rng, META_NOISE_CANDIDATES)
+        name_key = (attr_name, name)
+        if name_key in seen_names and maybe(rng, 0.55):
             continue
         content = pick(rng, values)
         if maybe(rng, 0.30):
             content = f"{content}-{uuid.uuid4().hex[:6]}"
-        if maybe(rng, 0.20):
+        if attr_name == "name" and maybe(rng, 0.20):
             name = f"x-{name}" if not name.startswith("x-") else name
         if maybe(rng, 0.12):
-            name = name.upper()
-        tags.append(f'<meta name="{html.escape(name, quote=True)}" content="{html.escape(content, quote=True)}" />')
-        seen_names.add(name)
+            name = _randomize_case(rng, name)
+        content = _format_meta_content(rng, content)
+        tags.append(
+            f'<meta {attr_name}="{html.escape(name, quote=True)}" content="{html.escape(content, quote=True)}" />'
+        )
+        seen_names.add(name_key)
 
     return "".join(tags)
