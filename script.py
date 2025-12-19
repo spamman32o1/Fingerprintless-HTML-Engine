@@ -162,6 +162,11 @@ def maybe(rng: random.Random, p: float) -> bool:
     return rng.random() < p
 
 
+def random_token(rng: random.Random, length: int = 6) -> str:
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+    return "".join(rng.choice(alphabet) for _ in range(length))
+
+
 def random_css(rng: random.Random) -> Tuple[str, str]:
     base_font = pick(rng, FONT_STACKS)
 
@@ -546,6 +551,9 @@ def build_variant(
 ) -> str:
     opt = randomize_opt_for_variant(rng, opt)
     body_css, wrapper_css = random_css(rng)
+    wrapper_class = f"wrap-{random_token(rng, 6)}"
+    content_class = f"content-{random_token(rng, 6)}"
+    nested_prefix = f"w{random_token(rng, 4)}"
     inner = span_wrap_html(rng, content_html, opt)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
@@ -563,7 +571,10 @@ def build_variant(
         mt = rfloat(rng, 0.0, 10.0, 2)
         mb = rfloat(rng, 0.0, 10.0, 2)
         disp = pick(rng, ["block", "flow-root", "contents"])
-        open_wrap += f'<div class="w{d}" style="padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};">'
+        open_wrap += (
+            f'<div class="{nested_prefix}{d}" '
+            f'style="padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};">'
+        )
         close_wrap = "</div>" + close_wrap
 
     # No template whitespace around inner
@@ -576,13 +587,14 @@ def build_variant(
         f"<title>{html.escape(title)}</title>"
         "<style>"
         f"body{{{body_css}}}"
-        f".wrap{{{wrapper_css}}}"
+        f".{wrapper_class}{{{wrapper_css}}}"
+        f".{content_class}{{}}"
         "</style>"
         f"{jsonld_scripts}"
         "</head>"
         "<body>"
-        "<div class=\"wrap\">"
-        f"{open_wrap}{before}<div class=\"content\">{inner}</div>{after}{close_wrap}"
+        f"<div class=\"{wrapper_class}\">"
+        f"{open_wrap}{before}<div class=\"{content_class}\">{inner}</div>{after}{close_wrap}"
         "</div>"
         "</body>"
         "</html>"
