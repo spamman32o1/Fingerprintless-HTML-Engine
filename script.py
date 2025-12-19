@@ -26,11 +26,11 @@ class Opt:
     count: int
     seed: int | None
 
-    wrap_chunk_rate: float = 0.16
+    wrap_chunk_rate: float = 0.08
     chunk_len_min: int = 2
     chunk_len_max: int = 6
 
-    per_word_rate: float = 0.02
+    per_word_rate: float = 0.01
 
     noise_divs_max: int = 4
     max_nesting: int = 4
@@ -146,6 +146,10 @@ def build_fake_jsonld_scripts(rng: random.Random) -> str:
     return "".join(blocks)
 
 
+def _clamp_rate(val: float) -> float:
+    return max(0.0, min(1.0, val))
+
+
 def rfloat(rng: random.Random, a: float, b: float, digits: int = 3) -> float:
     return round(rng.uniform(a, b), digits)
 
@@ -216,6 +220,29 @@ def random_css(rng: random.Random) -> Tuple[str, str]:
     """.strip()
 
     return body_css, wrapper_css
+
+
+def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
+    wrap_factor = rfloat(rng, 0.8, 1.2)
+    word_factor = rfloat(rng, 0.8, 1.2)
+
+    chunk_len_min = max(1, opt.chunk_len_min + rint(rng, -1, 1))
+    chunk_len_max = max(chunk_len_min, opt.chunk_len_max + rint(rng, -1, 1))
+
+    noise_divs_max = max(0, opt.noise_divs_max + rint(rng, -1, 1))
+
+    return Opt(
+        count=opt.count,
+        seed=opt.seed,
+        wrap_chunk_rate=_clamp_rate(opt.wrap_chunk_rate * wrap_factor),
+        chunk_len_min=chunk_len_min,
+        chunk_len_max=chunk_len_max,
+        per_word_rate=_clamp_rate(opt.per_word_rate * word_factor),
+        noise_divs_max=noise_divs_max,
+        max_nesting=opt.max_nesting,
+        title_prefix=opt.title_prefix,
+        ie_condition_randomize=opt.ie_condition_randomize,
+    )
 
 
 def noise_divs(rng: random.Random, nmax: int) -> str:
@@ -517,6 +544,7 @@ def span_wrap_html(rng: random.Random, html_in: str, opt: Opt) -> str:
 def build_variant(
     rng: random.Random, content_html: str, opt: Opt, idx: int, lang: str, title: str
 ) -> str:
+    opt = randomize_opt_for_variant(rng, opt)
     body_css, wrapper_css = random_css(rng)
     inner = span_wrap_html(rng, content_html, opt)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
