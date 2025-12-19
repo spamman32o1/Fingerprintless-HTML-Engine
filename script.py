@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import random
 import re
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -24,11 +25,11 @@ class Opt:
     count: int
     seed: int | None
 
-    wrap_chunk_rate: float = 0.24
+    wrap_chunk_rate: float = 0.16
     chunk_len_min: int = 2
     chunk_len_max: int = 6
 
-    per_word_rate: float = 0.03
+    per_word_rate: float = 0.02
 
     noise_divs_max: int = 4
     max_nesting: int = 4
@@ -45,6 +46,8 @@ BG_COLORS = ["#fff", "#fefefe", "#fcfcfc"]
 
 ENTITY_RE = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]+|#[0-9]+|#x[0-9A-Fa-f]+);")
 TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
+HTML_LANG_RE = re.compile(r"<html[^>]*?\blang\s*=\s*['\"]?([a-zA-Z0-9-]+)", re.IGNORECASE)
+BODY_RE = re.compile(r"<body[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
 
 # Skip modifying text inside these tags (includes <a> per your request)
 SKIP_TEXT_INSIDE = {"script", "style", "textarea", "code", "pre", "a"}
@@ -160,6 +163,29 @@ def letter_style(rng: random.Random) -> str:
     )
 
 
+def extract_lang(html_in: str) -> str:
+    m = HTML_LANG_RE.search(html_in)
+    if m:
+        return m.group(1)
+    return "en"
+
+
+def extract_body_content(html_in: str) -> str:
+    m = BODY_RE.search(html_in)
+    if m:
+        return m.group(1)
+
+    stripped = re.sub(r"(?is)<!doctype[^>]*>", "", html_in)
+    stripped = re.sub(r"(?is)<head[^>]*>.*?</head>", "", stripped)
+    stripped = re.sub(r"(?is)</?html[^>]*>", "", stripped)
+    stripped = re.sub(r"(?is)</?body[^>]*>", "", stripped)
+    return stripped.strip()
+
+
+def random_title() -> str:
+    return f"letter-{uuid.uuid4().hex[:12]}"
+
+
 def tokenize_text_preserving_entities(text: str) -> List[tuple[str, str]]:
     tokens: List[tuple[str, str]] = []
     i = 0
@@ -206,7 +232,7 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
                 else:
                     rendered.append(html.escape(val, quote=False))
             chunk_out = "".join(rendered)
-            if maybe(rng, 0.40):
+            if maybe(rng, 0.28):
                 out.append(f'<span style="{letter_style(rng)}">{chunk_out}</span>')
             else:
                 out.append(chunk_out)
@@ -297,7 +323,9 @@ def span_wrap_html(rng: random.Random, html_in: str, opt: Opt) -> str:
     return "".join(out)
 
 
-def build_variant(rng: random.Random, content_html: str, opt: Opt, idx: int) -> str:
+def build_variant(
+    rng: random.Random, content_html: str, opt: Opt, idx: int, lang: str, title: str
+) -> str:
     body_css, wrapper_css = random_css(rng)
     inner = span_wrap_html(rng, content_html, opt)
 
@@ -315,12 +343,10 @@ def build_variant(rng: random.Random, content_html: str, opt: Opt, idx: int) -> 
         open_wrap += f'<div class="w{d}" style="padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};">'
         close_wrap = "</div>" + close_wrap
 
-    title = f"{opt.title_prefix} {idx:03d}"
-
     # No template whitespace around inner
     return (
         "<!doctype html>"
-        "<html lang=\"en\">"
+        f"<html lang=\"{html.escape(lang, quote=True)}\">"
         "<head>"
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />"
@@ -365,7 +391,9 @@ def main() -> None:
     seed = int(seed_in) if seed_in else None
 
     opt = Opt(count=count, seed=seed)
-    content = p.read_text(encoding="utf-8")
+    raw_html = p.read_text(encoding="utf-8")
+    content = extract_body_content(raw_html)
+    lang = extract_lang(raw_html)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     outdir = Path(f"variants_{ts}")
@@ -374,7 +402,8 @@ def main() -> None:
     rng = random.Random(opt.seed)
 
     for i in range(1, opt.count + 1):
-        variant = build_variant(rng, content, opt, i)
+        variant_title = random_title()
+        variant = build_variant(rng, content, opt, i, lang, variant_title)
         (outdir / f"variant_{i:03d}.html").write_text(variant, encoding="utf-8")
 
     print(f"\nDone. Wrote {opt.count} files to: {outdir.resolve()}")
