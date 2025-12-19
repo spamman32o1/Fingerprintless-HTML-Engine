@@ -1451,7 +1451,7 @@ def prompt_int(msg: str, lo: int = 1) -> int:
         if n < lo:
             print(f"Must be >= {lo}.")
             continue
-    return n
+        return n
 
 
 def _prompt_yes_no(message: str) -> bool:
