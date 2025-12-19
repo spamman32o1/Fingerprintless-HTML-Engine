@@ -218,6 +218,218 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             code_style.append("font-style:italic;")
         extra_rules.append("code,pre,kbd,samp{" + "".join(code_style) + "}")
 
+    accent_palette = [
+        "#0ea5e9",
+        "#2563eb",
+        "#16a34a",
+        "#d97706",
+        "#e11d48",
+        "#9333ea",
+        "#0ea5e9",
+        "#0f172a",
+        text_color,
+    ]
+
+    underline_styles = [
+        "underline solid",
+        "underline dotted",
+        "underline dashed",
+        "underline double",
+        "underline wavy",
+    ]
+
+    link_color = pick(rng, accent_palette)
+    hover_color = pick(rng, accent_palette)
+    active_color = pick(rng, accent_palette)
+    underline = pick(rng, underline_styles)
+    underline_thickness = rfloat(rng, 1.0, 2.4, 2)
+    underline_offset = rfloat(rng, 1.5, 3.4, 2)
+
+    transition_pool = [
+        "transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;",
+        "transition: all 180ms ease-in-out;",
+        "transition: color 120ms linear, text-decoration-color 120ms linear;",
+        "transition: transform 140ms ease, box-shadow 180ms ease;",
+    ]
+    transition_rule = pick(rng, transition_pool)
+
+    link_rules = [
+        f"color:{link_color};",
+        f"text-decoration:{underline};",
+        f"text-decoration-thickness:{underline_thickness}px;",
+        f"text-underline-offset:{underline_offset}px;",
+        transition_rule if maybe(rng, 0.70) else "",
+    ]
+
+    hover_rules = [f"color:{hover_color};"]
+    if maybe(rng, 0.60):
+        hover_rules.append("text-decoration-color: currentColor;")
+    if maybe(rng, 0.22):
+        hover_rules.append("transform: translateY(-0.5px);")
+
+    active_rules = [f"color:{active_color};"]
+    if maybe(rng, 0.36):
+        active_rules.append("opacity:0.92;")
+
+    extra_rules.append("a{" + "".join(link_rules) + "}")
+    extra_rules.append("a:hover{" + "".join(hover_rules) + "}")
+    extra_rules.append("a:active{" + "".join(active_rules) + "}")
+
+    list_styles = [
+        "disc",
+        "circle",
+        "square",
+        "decimal",
+        "lower-alpha",
+        "upper-roman",
+    ]
+    list_style_type = pick(rng, list_styles)
+    list_style_position = pick(rng, ["inside", "outside"])
+    list_spacing = rfloat(rng, 0.35, 0.8, 2)
+    extra_rules.append(
+        "ul,ol{"
+        + f"list-style-type:{list_style_type};"
+        + f"list-style-position:{list_style_position};"
+        + f"padding-left:{rfloat(rng, 16.0, 28.0, 2)}px;"
+        + f"margin-block:{list_spacing}em;"
+        + "}"
+    )
+    if maybe(rng, 0.30):
+        extra_rules.append(
+            "ul li::marker, ol li::marker{"
+            + f"color:{pick(rng, accent_palette)};"
+            + (f"font-size:{rfloat(rng, 1.0, 1.2, 2)}em;" if maybe(rng, 0.32) else "")
+            + "}"
+        )
+
+    border_color = f"rgba(0,0,0,{rfloat(rng, 0.05, 0.14, 3)})"
+    stripe_color = f"rgba(0,0,0,{rfloat(rng, 0.015, 0.06, 3)})"
+    table_rule_parts = [
+        "width:100%;",
+        "border-collapse:collapse;" if maybe(rng, 0.55) else "border-collapse:separate;",
+        f"border:{rfloat(rng, 0.5, 1.2, 2)}px solid {border_color};",
+    ]
+    extra_rules.append("table{" + "".join(table_rule_parts) + "}")
+    cell_padding = rfloat(rng, 8.0, 14.0, 2)
+    extra_rules.append(
+        "th,td{"
+        + f"padding:{cell_padding}px;"
+        + f"border:{rfloat(rng, 0.4, 1.0, 2)}px solid {border_color};"
+        + "text-align:left;"
+        + "}"
+    )
+    extra_rules.append(
+        "th{"
+        + f"background-color:rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)});"
+        + ("font-weight:700;" if maybe(rng, 0.55) else "")
+        + "}"
+    )
+    if maybe(rng, 0.60):
+        extra_rules.append(
+            "tbody tr:nth-child(even){"
+            + f"background-color:{stripe_color};"
+            + "}"
+        )
+    if maybe(rng, 0.28):
+        extra_rules.append(
+            "table caption{"
+            + f"caption-side:{pick(rng, ['top', 'bottom'])};"
+            + f"color:{pick(rng, accent_palette)};"
+            + f"font-style:{pick(rng, ['normal', 'italic'])};"
+            + "padding:6px;"
+            + "}"
+        )
+
+    button_bg = pick(rng, accent_palette)
+    button_fg = pick(rng, [text_color, "#ffffff", "#111827"])
+    button_radius = rfloat(rng, 6.0, 12.0, 2)
+    button_border = pick(
+        rng,
+        [
+            "none",
+            f"1px solid rgba(255,255,255,{rfloat(rng, 0.20, 0.45, 3)})",
+            f"1px solid rgba(0,0,0,{rfloat(rng, 0.12, 0.24, 3)})",
+        ],
+    )
+    button_shadow = pick(
+        rng,
+        [
+            "none",
+            f"0 4px 12px rgba(0,0,0,{rfloat(rng, 0.08, 0.18, 3)})",
+            "inset 0 1px 0 rgba(255,255,255,0.45), 0 6px 14px rgba(0,0,0,0.10)",
+        ],
+    )
+
+    button_rule = (
+        "button,input[type=button],input[type=submit],input[type=reset]{"
+        + f"background:{button_bg};"
+        + f"color:{button_fg};"
+        + f"border-radius:{button_radius}px;"
+        + f"border:{button_border};"
+        + f"padding:{rfloat(rng, 7.0, 11.0, 2)}px {rfloat(rng, 12.0, 18.0, 2)}px;"
+        + f"font-weight:{pick(rng, ['500', '600', '700'])};"
+        + f"box-shadow:{button_shadow};"
+        + (transition_rule if maybe(rng, 0.75) else "")
+        + "cursor:pointer;"
+        + "}"
+    )
+    extra_rules.append(button_rule)
+
+    button_hover = [f"background:{pick(rng, accent_palette)};"]
+    if maybe(rng, 0.40):
+        button_hover.append("transform:translateY(-1px);")
+    if maybe(rng, 0.38):
+        button_hover.append(
+            f"box-shadow:0 8px 18px rgba(0,0,0,{rfloat(rng, 0.10, 0.20, 3)});"
+        )
+    extra_rules.append(
+        "button:hover,input[type=button]:hover,input[type=submit]:hover,input[type=reset]:hover{"
+        + "".join(button_hover)
+        + "}"
+    )
+    button_active = [f"background:{pick(rng, accent_palette)};"]
+    if maybe(rng, 0.44):
+        button_active.append("transform:translateY(0px) scale(0.99);")
+    if maybe(rng, 0.30):
+        button_active.append("box-shadow:none;")
+    extra_rules.append(
+        "button:active,input[type=button]:active,input[type=submit]:active,input[type=reset]:active{"
+        + "".join(button_active)
+        + "}"
+    )
+
+    inline_accent_color = pick(rng, accent_palette)
+    extra_rules.append(
+        "small,sub,sup{"
+        + f"color:{inline_accent_color};"
+        + (f"font-weight:{pick(rng, ['500', '600'])};" if maybe(rng, 0.40) else "")
+        + "letter-spacing:0.01em;"
+        + "}"
+    )
+    extra_rules.append(
+        "mark{"
+        + f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
+        + f"color:{pick(rng, [text_color, '#111827'])};"
+        + "padding:0 2px;"
+        + "border-radius:3px;"
+        + "}"
+    )
+    extra_rules.append(
+        "abbr{"
+        + f"border-bottom:1px {pick(rng, ['dotted', 'dashed', 'solid'])} {inline_accent_color};"
+        + f"text-decoration-color:{inline_accent_color};"
+        + "text-decoration-skip-ink:auto;"
+        + "cursor:help;"
+        + "}"
+    )
+    if maybe(rng, 0.26):
+        extra_rules.append(
+            "cite,em{"
+            + f"color:{pick(rng, accent_palette)};"
+            + "font-style:italic;"
+            + "}"
+        )
+
     return body_css, wrapper_css, "".join(extra_rules)
 
 
