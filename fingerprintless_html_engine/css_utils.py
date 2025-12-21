@@ -111,13 +111,33 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
 
     body_css = " ".join(body_rules)
 
+    border_rad = rfloat(rng, 12.0, 20.0, 2)
+    border = "none"
+    if maybe(rng, 0.55):
+        border_styles = [
+            f"1px solid rgba(127,127,127,{rfloat(rng, 0.16, 0.28, 3)})",
+            f"1px dashed rgba(110,110,110,{rfloat(rng, 0.16, 0.24, 3)})",
+            f"1px solid rgba(210,210,210,{rfloat(rng, 0.18, 0.30, 3)})",
+            f"1px double rgba(120,120,120,{rfloat(rng, 0.14, 0.22, 3)})",
+        ]
+        border = pick(rng, border_styles)
+
+    shadow = "none"
+    if maybe(rng, 0.42):
+        shadow = pick(
+            rng,
+            [
+                "0 6px 18px rgba(0,0,0,0.07)",
+                "0 10px 24px -12px rgba(15,23,42,0.22)",
+                "0 3px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.04)",
+                "inset 0 1px 0 rgba(255,255,255,0.65), 0 12px 28px rgba(15,23,42,0.12)",
+            ],
+        )
+
     layout_mode = pick(rng, ["block", "flow-root", "flex", "grid"])
     gap = rfloat(rng, 6.0, 14.0, 2)
-    columns = 1
-    uses_stacked_wrapper = False
     if layout_mode == "flex":
         flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
-        uses_stacked_wrapper = True
         if maybe(rng, 0.24):
             flex_props.append(
                 f"align-items:{pick(rng, ['stretch', 'flex-start', 'center'])};"
@@ -130,7 +150,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     elif layout_mode == "grid":
         grid_props = ["display:grid;", f"gap:{gap}px;"]
         columns = rng.randint(1, 3)
-        uses_stacked_wrapper = columns == 1
         if columns > 1 and maybe(rng, 0.60):
             grid_props.append(
                 f"grid-template-columns: repeat({columns}, minmax(0, 1fr));"
@@ -146,41 +165,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         extra = " ".join(grid_props)
     else:
         extra = f"display:{layout_mode};"
-
-    likely_letter_layout = max_w <= 780.0 and pad <= 18.0 and line_height >= 1.45
-
-    border_rad = rfloat(rng, 12.0, 20.0, 2)
-    subtle_shadows = [
-        "0 2px 6px rgba(0,0,0,0.04)",
-        "0 4px 12px rgba(0,0,0,0.06)",
-        "0 1px 3px rgba(0,0,0,0.05), 0 6px 14px rgba(15,23,42,0.06)",
-    ]
-
-    shadow = "none"
-    if maybe(rng, 0.42):
-        shadow = pick(
-            rng,
-            subtle_shadows
-            + [
-                "0 6px 18px rgba(0,0,0,0.07)",
-                "0 10px 24px -12px rgba(15,23,42,0.22)",
-                "inset 0 1px 0 rgba(255,255,255,0.65), 0 12px 28px rgba(15,23,42,0.12)",
-            ],
-        )
-
-    border = "none"
-    border_conditions_ok = not likely_letter_layout and not uses_stacked_wrapper
-    if border_conditions_ok and maybe(rng, 0.22):
-        border_styles = [
-            f"1px solid rgba(127,127,127,{rfloat(rng, 0.12, 0.20, 3)})",
-            f"1px dashed rgba(110,110,110,{rfloat(rng, 0.10, 0.18, 3)})",
-            f"1px solid rgba(210,210,210,{rfloat(rng, 0.12, 0.22, 3)})",
-        ]
-        border = pick(rng, border_styles)
-    else:
-        if shadow == "none":
-            shadow = pick(rng, subtle_shadows)
-        pad += rfloat(rng, 1.5, 4.0, 2)
 
     text_align = None
     if maybe(rng, 0.18):
