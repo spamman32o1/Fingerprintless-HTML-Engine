@@ -241,7 +241,8 @@ def noise_divs(
                 f'aria-label="{pick(rng, ["decorative", "layer", "noise", "spacer"])} {uuid.uuid4().hex[:4]}"'
             )
         if maybe(rng, 0.35):
-            attrs.append(f'data-noise="{uuid.uuid4().hex[: rint(rng, 4, 8)]}"')
+            random_attr = f"n{uuid.uuid4().hex[: rint(rng, 4, 8)]}"
+            attrs.append(f'{random_attr}="{uuid.uuid4().hex[: rint(rng, 4, 8)]}"')
 
         extra_style_blocks = []
         assigned_class = None
