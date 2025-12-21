@@ -94,10 +94,42 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
         h = rfloat(rng, 0.0, 8.5, 2)
         mt = rfloat(rng, 0.0, 8.5, 2)
         mb = rfloat(rng, 0.0, 8.5, 2)
-        w = rfloat(rng, 80.0, 180.0, 2)
-        bits.append(
-            f'<div aria-hidden="true" style="height:{h}px;margin:{mt}px 0 {mb}px 0;max-width:{w}px;"></div>'
-        )
+        max_w = rfloat(rng, 80.0, 180.0, 2)
+        styles = [f"height:{h}px", f"margin:{mt}px 0 {mb}px 0"]
+        if maybe(rng, 0.65):
+            styles.append(f"max-width:{max_w}px")
+        if maybe(rng, 0.45):
+            min_w = rfloat(rng, 40.0, max(41.0, max_w - 10.0), 2)
+            styles.append(f"min-width:{min_w}px")
+        if maybe(rng, 0.35):
+            styles.append(f"display:{pick(rng, ['block', 'inline-block'])}")
+        if maybe(rng, 0.30):
+            styles.append(f"opacity:{rfloat(rng, 0.35, 0.95, 2)}")
+        if maybe(rng, 0.30):
+            r = rint(rng, 200, 255)
+            g = rint(rng, 200, 255)
+            b = rint(rng, 200, 255)
+            a = rfloat(rng, 0.02, 0.12, 2)
+            styles.append(f"background-color:rgba({r},{g},{b},{a})")
+        if maybe(rng, 0.40):
+            styles.append(f"border-radius:{rfloat(rng, 0.0, 6.0, 2)}px")
+        if maybe(rng, 0.35):
+            tx = rfloat(rng, -2.0, 2.0, 2)
+            ty = rfloat(rng, -2.0, 2.0, 2)
+            rot = rfloat(rng, -0.6, 0.6, 2)
+            styles.append(f"transform:translate({tx}px,{ty}px) rotate({rot}deg)")
+
+        attrs = []
+        if maybe(rng, 0.80):
+            attrs.append('aria-hidden="true"')
+        if maybe(rng, 0.35):
+            attrs.append('role="presentation"')
+        if maybe(rng, 0.35):
+            attrs.append(f'data-noise="{uuid.uuid4().hex[: rint(rng, 4, 8)]}"')
+
+        attrs_str = f" {' '.join(attrs)}" if attrs else ""
+        style_str = ";".join(styles)
+        bits.append(f"<div{attrs_str} style=\"{style_str};\"></div>")
     return "".join(bits)
 
 
