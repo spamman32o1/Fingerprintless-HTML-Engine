@@ -314,7 +314,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     extra_rules.append(
         "th,td{"
         + f"padding:{cell_padding}px;"
-        + f"border:{rfloat(rng, 0.4, 1.0, 2)}px solid {border_color};"
         + "text-align:left;"
         + "}"
     )
