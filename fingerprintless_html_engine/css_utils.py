@@ -15,10 +15,10 @@ FONT_FALLBACKS = {
 }
 
 
-def _build_font_stack(rng: random.Random, pool_key: str) -> str:
+def _build_font_stack(rng: random.Random, pool_key: str) -> tuple[str, bool]:
     pool = list(FONT_FAMILY_POOLS[pool_key])
     if not pool:
-        return ", ".join(FONT_FALLBACKS[pool_key])
+        return ", ".join(FONT_FALLBACKS[pool_key]), False
 
     count = min(len(pool), rng.randint(2, 4))
     families = rng.sample(pool, count)
@@ -33,25 +33,64 @@ def _build_font_stack(rng: random.Random, pool_key: str) -> str:
     fallbacks = FONT_FALLBACKS[pool_key]
     existing = set(families)
     ordered = families + [fallback for fallback in fallbacks if fallback not in existing]
-    return ", ".join(ordered)
+    variable_used = any(family in variable_fonts for family in families)
+    return ", ".join(ordered), variable_used
+
+
+def _font_variation_settings(rng: random.Random) -> str:
+    wght = rng.randint(350, 750)
+    wdth = rng.randint(85, 115)
+    slnt = rng.randint(-10, 0)
+    return (
+        'font-variation-settings: "wght" '
+        f"{wght}, "
+        '"wdth" '
+        f"{wdth}, "
+        '"slnt" '
+        f"{slnt};"
+    )
+
+
+def _maybe_font_details(
+    rng: random.Random,
+    *,
+    allow_variations: bool,
+) -> list[str]:
+    rules: list[str] = []
+    if allow_variations and maybe(rng, 0.40):
+        rules.append(_font_variation_settings(rng))
+    if maybe(rng, 0.35):
+        rules.append(f"font-optical-sizing:{pick(rng, ['auto', 'none'])};")
+    if maybe(rng, 0.35):
+        rules.append(f"font-kerning:{pick(rng, ['auto', 'normal', 'none'])};")
+    if maybe(rng, 0.35):
+        rules.append(f"font-stretch:{rfloat(rng, 85.0, 115.0, 1)}%;")
+    return rules
 
 
 def random_css(rng: random.Random) -> tuple[str, str, str]:
     base_pool = pick(rng, list(FONT_FAMILY_POOLS))
-    base_font = _build_font_stack(rng, base_pool)
+    base_font, base_is_variable = _build_font_stack(rng, base_pool)
     heading_font = None
     quote_font = None
     code_font = None
+    heading_is_variable = False
+    quote_is_variable = False
+    code_is_variable = False
 
     heading_pool_choices = ["sans", "serif", "cursive", "cjk"]
     quote_pool_choices = ["serif", "cursive", "cjk", "sans"]
 
     if maybe(rng, 0.55):
-        heading_font = _build_font_stack(rng, pick(rng, heading_pool_choices))
+        heading_font, heading_is_variable = _build_font_stack(
+            rng, pick(rng, heading_pool_choices)
+        )
     if maybe(rng, 0.38):
-        quote_font = _build_font_stack(rng, pick(rng, quote_pool_choices))
+        quote_font, quote_is_variable = _build_font_stack(
+            rng, pick(rng, quote_pool_choices)
+        )
     if maybe(rng, 0.50):
-        code_font = _build_font_stack(rng, "mono")
+        code_font, code_is_variable = _build_font_stack(rng, "mono")
 
     font_size = rfloat(rng, 14.2, 16.0, 2)
     line_height = rfloat(rng, 1.36, 1.60, 3)
@@ -109,6 +148,12 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         f"word-spacing: {word_spacing}em;",
         f"opacity: {opacity};",
     ]
+    body_rules.extend(
+        _maybe_font_details(
+            rng,
+            allow_variations=base_is_variable,
+        )
+    )
 
     if body_background_images:
         body_rules.append(f"background-image: {', '.join(body_background_images)};")
@@ -208,6 +253,12 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             heading_style.append(f"font-weight:{pick(rng, ['600', '700', '800', '900'])};")
         if maybe(rng, 0.18):
             heading_style.append("font-style:italic;")
+        heading_style.extend(
+            _maybe_font_details(
+                rng,
+                allow_variations=heading_is_variable,
+            )
+        )
         extra_rules.append("h1,h2,h3,h4,h5,h6{" + "".join(heading_style) + "}")
     if quote_font:
         quote_style: list[str] = [f"font-family:{quote_font};"]
@@ -215,6 +266,12 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             quote_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
         if maybe(rng, 0.55):
             quote_style.append("font-style:italic;")
+        quote_style.extend(
+            _maybe_font_details(
+                rng,
+                allow_variations=quote_is_variable,
+            )
+        )
         extra_rules.append("blockquote{" + "".join(quote_style) + "}")
     if code_font:
         code_style: list[str] = [f"font-family:{code_font};"]
@@ -222,6 +279,12 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             code_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
         if maybe(rng, 0.08):
             code_style.append("font-style:italic;")
+        code_style.extend(
+            _maybe_font_details(
+                rng,
+                allow_variations=code_is_variable,
+            )
+        )
         extra_rules.append("code,pre,kbd,samp{" + "".join(code_style) + "}")
 
     accent_palette = [
@@ -448,10 +511,18 @@ def letter_style(rng: random.Random) -> str:
 
     rot = rfloat(rng, -0.20, 0.20, 3) if maybe(rng, 0.05) else 0.0
 
+    font_variation = ""
+    if maybe(rng, 0.05):
+        font_variation = (
+            'font-variation-settings:"wght" '
+            f"{rng.randint(360, 640)};"
+        )
+
     return (
         f"font-size:{fs}em;"
         f"letter-spacing:{ls}em;"
         f"opacity:{op};"
+        f"{font_variation}"
         f"position:relative;top:{dy}px;"
         f"display:inline-block;"
         "white-space:nowrap;"
