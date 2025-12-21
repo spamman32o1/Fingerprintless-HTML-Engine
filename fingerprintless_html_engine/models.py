@@ -15,6 +15,7 @@ class Opt:
 
     noise_divs_max: int = 4
     max_nesting: int = 4
+    max_nesting_jitter: int = 0
     title_prefix: str = "Variant"
 
     ie_condition_randomize: bool = True
