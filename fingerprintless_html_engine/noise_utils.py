@@ -90,40 +90,115 @@ def _random_date_string(rng: random.Random, year: int | None = None) -> str:
 def noise_divs(rng: random.Random, nmax: int) -> str:
     n = rint(rng, 0, max(0, nmax))
     bits = []
+    def random_rgba(alpha_min: float, alpha_max: float) -> str:
+        r = rint(rng, 20, 240)
+        g = rint(rng, 20, 240)
+        b = rint(rng, 20, 240)
+        a = rfloat(rng, alpha_min, alpha_max, 2)
+        return f"rgba({r},{g},{b},{a})"
+
+    def random_size() -> str:
+        unit = pick(rng, ["px", "em", "rem", "%"])
+        if unit == "%":
+            value = rfloat(rng, 10.0, 100.0, 2)
+        elif unit == "em":
+            value = rfloat(rng, 0.4, 12.0, 2)
+        elif unit == "rem":
+            value = rfloat(rng, 0.5, 14.0, 2)
+        else:
+            value = rfloat(rng, 24.0, 260.0, 2)
+        return f"{value}{unit}"
+
     for _ in range(n):
+
         h = rfloat(rng, 0.0, 8.5, 2)
         mt = rfloat(rng, 0.0, 8.5, 2)
         mb = rfloat(rng, 0.0, 8.5, 2)
         max_w = rfloat(rng, 80.0, 180.0, 2)
         styles = [f"height:{h}px", f"margin:{mt}px 0 {mb}px 0"]
+        if maybe(rng, 0.45):
+            styles.append(f"width:{random_size()}")
         if maybe(rng, 0.65):
             styles.append(f"max-width:{max_w}px")
         if maybe(rng, 0.45):
             min_w = rfloat(rng, 40.0, max(41.0, max_w - 10.0), 2)
             styles.append(f"min-width:{min_w}px")
         if maybe(rng, 0.35):
-            styles.append(f"display:{pick(rng, ['block', 'inline-block'])}")
+            display = pick(rng, ["block", "inline-block", "inline", "flex", "inline-flex"])
+            styles.append(f"display:{display}")
+            if display in {"flex", "inline-flex"} and maybe(rng, 0.70):
+                styles.append(f"gap:{rfloat(rng, 0.0, 12.0, 2)}px")
         if maybe(rng, 0.30):
             styles.append(f"opacity:{rfloat(rng, 0.35, 0.95, 2)}")
         if maybe(rng, 0.30):
-            r = rint(rng, 200, 255)
-            g = rint(rng, 200, 255)
-            b = rint(rng, 200, 255)
-            a = rfloat(rng, 0.02, 0.12, 2)
-            styles.append(f"background-color:rgba({r},{g},{b},{a})")
+            styles.append(f"background-color:{random_rgba(0.02, 0.12)}")
+        if maybe(rng, 0.22):
+            if maybe(rng, 0.55):
+                angle = rint(rng, 0, 360)
+                styles.append(
+                    "background-image:linear-gradient("
+                    f"{angle}deg,{random_rgba(0.05, 0.2)},{random_rgba(0.05, 0.2)})"
+                )
+            else:
+                x = rint(rng, 0, 100)
+                y = rint(rng, 0, 100)
+                styles.append(
+                    "background-image:radial-gradient(circle at "
+                    f"{x}% {y}%,{random_rgba(0.05, 0.2)},{random_rgba(0.05, 0.2)})"
+                )
         if maybe(rng, 0.40):
             styles.append(f"border-radius:{rfloat(rng, 0.0, 6.0, 2)}px")
+        if maybe(rng, 0.30):
+            shadow_x = rfloat(rng, -4.0, 4.0, 2)
+            shadow_y = rfloat(rng, -4.0, 4.0, 2)
+            blur = rfloat(rng, 0.0, 12.0, 2)
+            styles.append(f"box-shadow:{shadow_x}px {shadow_y}px {blur}px {random_rgba(0.06, 0.3)}")
+        if maybe(rng, 0.28):
+            styles.append(f"border:1px solid {random_rgba(0.05, 0.25)}")
+        if maybe(rng, 0.20):
+            styles.append(f"outline:1px solid {random_rgba(0.05, 0.25)}")
+        if maybe(rng, 0.25):
+            styles.append(f"min-height:{random_size()}")
+        if maybe(rng, 0.25):
+            styles.append(f"max-height:{random_size()}")
+        if maybe(rng, 0.25):
+            filters = []
+            if maybe(rng, 0.65):
+                filters.append(f"blur({rfloat(rng, 0.0, 1.6, 2)}px)")
+            if maybe(rng, 0.65):
+                filters.append(f"brightness({rfloat(rng, 0.7, 1.4, 2)})")
+            if filters:
+                styles.append(f"filter:{' '.join(filters)}")
         if maybe(rng, 0.35):
-            tx = rfloat(rng, -2.0, 2.0, 2)
-            ty = rfloat(rng, -2.0, 2.0, 2)
-            rot = rfloat(rng, -0.6, 0.6, 2)
-            styles.append(f"transform:translate({tx}px,{ty}px) rotate({rot}deg)")
+            transforms = []
+            if maybe(rng, 0.70):
+                tx = rfloat(rng, -6.0, 6.0, 2)
+                ty = rfloat(rng, -6.0, 6.0, 2)
+                transforms.append(f"translate({tx}px,{ty}px)")
+            if maybe(rng, 0.60):
+                transforms.append(f"rotate({rfloat(rng, -6.0, 6.0, 2)}deg)")
+            if maybe(rng, 0.50):
+                transforms.append(f"scale({rfloat(rng, 0.85, 1.15, 2)})")
+            if maybe(rng, 0.40):
+                transforms.append(
+                    f"skew({rfloat(rng, -6.0, 6.0, 2)}deg,{rfloat(rng, -6.0, 6.0, 2)}deg)"
+                )
+            if transforms:
+                styles.append(f"transform:{' '.join(transforms)}")
 
         attrs = []
         if maybe(rng, 0.80):
             attrs.append('aria-hidden="true"')
         if maybe(rng, 0.35):
             attrs.append('role="presentation"')
+        if maybe(rng, 0.25):
+            attrs.append(f'data-layer="{rint(rng, 0, 12)}"')
+        if maybe(rng, 0.25):
+            attrs.append(f'data-noise-kind="{pick(rng, ["grain", "speckle", "haze", "dust", "grid"])}"')
+        if maybe(rng, 0.20):
+            attrs.append(
+                f'aria-label="{pick(rng, ["decorative", "layer", "noise", "spacer"])} {uuid.uuid4().hex[:4]}"'
+            )
         if maybe(rng, 0.35):
             attrs.append(f'data-noise="{uuid.uuid4().hex[: rint(rng, 4, 8)]}"')
 
