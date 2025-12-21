@@ -92,18 +92,37 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if maybe(rng, 0.50):
         code_font, code_is_variable = _build_font_stack(rng, "mono")
 
-    font_size = rfloat(rng, 14.2, 16.0, 2)
-    line_height = rfloat(rng, 1.36, 1.60, 3)
-    letter_spacing = rfloat(rng, -0.010, 0.028, 4)
-    word_spacing = rfloat(rng, -0.015, 0.100, 4)
+    font_size = (
+        rfloat(rng, 11.5, 20.5, 2)
+        if maybe(rng, 0.12)
+        else rfloat(rng, 13.2, 17.4, 2)
+    )
+    line_height = (
+        rfloat(rng, 1.05, 2.10, 3)
+        if maybe(rng, 0.14)
+        else rfloat(rng, 1.22, 1.78, 3)
+    )
+    letter_spacing = (
+        rfloat(rng, -0.060, 0.080, 4)
+        if maybe(rng, 0.16)
+        else rfloat(rng, -0.024, 0.048, 4)
+    )
+    word_spacing = (
+        rfloat(rng, -0.080, 0.300, 4)
+        if maybe(rng, 0.16)
+        else rfloat(rng, -0.030, 0.180, 4)
+    )
 
-    max_w = rfloat(rng, 660.0, 900.0, 2)
-    pad = rfloat(rng, 10.0, 22.0, 2)
-    margin_top = rfloat(rng, 8.0, 18.0, 2)
+    max_w = rfloat(rng, 640.0, 920.0, 2)
+    pad = rfloat(rng, 8.0, 24.0, 2)
+    margin_top = rfloat(rng, 6.0, 22.0, 2)
 
-    rot = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.18) else 0.0
-    skew = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.12) else 0.0
-    scale = rfloat(rng, 0.9980, 1.0045, 4) if maybe(rng, 0.22) else 1.0
+    rot = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.18) else 0.0
+    skew = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.12) else 0.0
+    skew_y = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.10) else 0.0
+    scale = rfloat(rng, 0.9960, 1.0065, 4) if maybe(rng, 0.22) else 1.0
+    scale_x = rfloat(rng, 0.985, 1.020, 4) if maybe(rng, 0.10) else 1.0
+    scale_y = rfloat(rng, 0.985, 1.020, 4) if maybe(rng, 0.10) else 1.0
 
     opacity = rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0
     text_color = pick(rng, TEXT_COLORS)
@@ -115,7 +134,10 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         ("linear", "#fcfcfc", "#f5f6f8", 165),
         ("linear", "#faf9f7", "#f2f3f5", 95),
         ("linear", "#f7f8f6", "#eef0f2", 45),
+        ("linear", "#fef7f1", "#f4f6f9", 120),
+        ("linear", "#f9fbff", "#f1f3f8", 200),
         ("radial", "#f8f9fb", "#f2f4f6", 0),
+        ("radial", "#fdfcfb", "#f4f4f6", 0),
     ]
     if maybe(rng, 0.30):
         g_type, c1, c2, angle = pick(rng, gradient_options)
@@ -133,13 +155,23 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         "radial-gradient(circle at 25% 20%, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0) 40%)",
         "linear-gradient(180deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.025) 70%, rgba(0,0,0,0) 100%)",
         "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 36%)",
+        "repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 12px)",
+        "repeating-radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 10px)",
+        "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.02) 70%, rgba(255,255,255,0) 100%)",
     ]
     if maybe(rng, 0.18):
         body_background_images.append(pick(rng, pattern_overlays))
 
+    use_css_vars = maybe(rng, 0.32)
+    accent_var = pick(rng, ["#0ea5e9", "#2563eb", "#16a34a", "#d97706", "#e11d48", text_color])
+    bg_var = pick(rng, BG_COLORS)
+
+    use_bg_var = use_css_vars and maybe(rng, 0.55)
+    use_accent_var = use_css_vars and maybe(rng, 0.55)
+
     body_rules = [
         "margin: 0;",
-        f"background-color: {bg_color};",
+        f"background-color: {'var(--bg)' if use_bg_var else bg_color};",
         f"color: {text_color};",
         f"font-family: {base_font};",
         f"font-size: {font_size}px;",
@@ -148,6 +180,29 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         f"word-spacing: {word_spacing}em;",
         f"opacity: {opacity};",
     ]
+    if use_css_vars:
+        body_rules.append(f"--accent: {accent_var};")
+        body_rules.append(f"--bg: {bg_var};")
+    if maybe(rng, 0.28):
+        body_rules.append(f"font-weight:{pick(rng, ['300', '400', '500', '600', '700'])};")
+    if maybe(rng, 0.22):
+        body_rules.append(f"font-style:{pick(rng, ['normal', 'italic', 'oblique'])};")
+    if maybe(rng, 0.18):
+        body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
+    if maybe(rng, 0.20):
+        body_rules.append(
+            f"font-feature-settings:{pick(rng, ['\"kern\" 1, \"liga\" 1', '\"liga\" 1', '\"kern\" 1, \"onum\" 1', '\"ss01\" 1'])};"
+        )
+    if maybe(rng, 0.20):
+        body_rules.append(
+            f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
+        )
+    if maybe(rng, 0.14):
+        body_rules.append(
+            f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
+        )
+    if maybe(rng, 0.14):
+        body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
     body_rules.extend(
         _maybe_font_details(
             rng,
@@ -159,6 +214,14 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         body_rules.append(f"background-image: {', '.join(body_background_images)};")
     if body_background_images and maybe(rng, 0.28):
         body_rules.append(f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};")
+    if body_background_images and maybe(rng, 0.22):
+        body_rules.append(
+            f"background-position: {pick(rng, ['center', 'top left', 'top right', 'bottom left', 'bottom right'])};"
+        )
+    if body_background_images and maybe(rng, 0.18):
+        body_rules.append(
+            f"background-attachment: {pick(rng, ['scroll', 'fixed', 'local'])};"
+        )
 
     body_css = " ".join(body_rules)
 
@@ -221,21 +284,51 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if maybe(rng, 0.18):
         text_align = pick(rng, ["start", "left", "center", "justify"])
 
-    translate_x = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
-    translate_y = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
+    translate_x = rfloat(rng, -2.5, 2.5, 3) if maybe(rng, 0.16) else 0.0
+    translate_y = rfloat(rng, -2.5, 2.5, 3) if maybe(rng, 0.16) else 0.0
     transforms = [
         f"rotate({rot}deg)",
         f"skewX({skew}deg)",
+        f"skewY({skew_y}deg)",
         f"scale({scale})",
+        f"scaleX({scale_x})",
+        f"scaleY({scale_y})",
     ]
     if translate_x or translate_y:
         transforms.insert(0, f"translate({translate_x}px, {translate_y}px)")
 
+    pad_y = pad
+    pad_x = pad
+    pad_top = pad
+    pad_bottom = pad
+    pad_right = pad
+    pad_left = pad
+    if maybe(rng, 0.30):
+        pad_y = rfloat(rng, 8.0, 26.0, 2)
+        pad_x = rfloat(rng, 8.0, 26.0, 2)
+    if maybe(rng, 0.22):
+        pad_top = rfloat(rng, 6.0, 24.0, 2)
+        pad_bottom = rfloat(rng, 6.0, 24.0, 2)
+        pad_left = rfloat(rng, 6.0, 24.0, 2)
+        pad_right = rfloat(rng, 6.0, 24.0, 2)
+
+    margin_bottom = rfloat(rng, 8.0, 22.0, 2)
+    margin_side = rfloat(rng, 0.0, 18.0, 2)
+    margin_pattern = f"{margin_top}px auto"
+    if maybe(rng, 0.30):
+        margin_pattern = f"{margin_top}px auto {margin_bottom}px"
+    if maybe(rng, 0.22):
+        margin_pattern = f"{margin_top}px {margin_side}px {margin_bottom}px"
+
     wrapper_css = " ".join(
         [
             f"max-width: {max_w}px;",
-            f"padding: {pad}px;",
-            f"margin: {margin_top}px auto;",
+            (
+                f"padding: {pad_y}px {pad_x}px;"
+                if maybe(rng, 0.55)
+                else f"padding: {pad_top}px {pad_right}px {pad_bottom}px {pad_left}px;"
+            ),
+            f"margin: {margin_pattern};",
             f"border-radius: {border_rad}px;",
             f"border: {border};",
             f"box-shadow: {shadow};",
@@ -307,9 +400,9 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         "underline wavy",
     ]
 
-    link_color = pick(rng, accent_palette)
-    hover_color = pick(rng, accent_palette)
-    active_color = pick(rng, accent_palette)
+    link_color = "var(--accent)" if use_accent_var and maybe(rng, 0.55) else pick(rng, accent_palette)
+    hover_color = "var(--accent)" if use_accent_var and maybe(rng, 0.45) else pick(rng, accent_palette)
+    active_color = "var(--accent)" if use_accent_var and maybe(rng, 0.35) else pick(rng, accent_palette)
     underline = pick(rng, underline_styles)
     underline_thickness = rfloat(rng, 1.0, 2.4, 2)
     underline_offset = rfloat(rng, 1.5, 3.4, 2)
@@ -408,7 +501,7 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             + "}"
         )
 
-    button_bg = pick(rng, accent_palette)
+    button_bg = "var(--accent)" if use_accent_var and maybe(rng, 0.40) else pick(rng, accent_palette)
     button_fg = pick(rng, [text_color, "#ffffff", "#111827"])
     button_radius = rfloat(rng, 6.0, 12.0, 2)
     button_border = pick(
