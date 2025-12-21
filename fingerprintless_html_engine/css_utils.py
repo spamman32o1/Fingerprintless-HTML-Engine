@@ -162,17 +162,19 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     bg_color = pick(rng, bg_palette)
 
     body_background_images: list[str] = []
-    gradient_options = [
-        ("linear", "#fefefe", "#f7f8fb", 135),
-        ("linear", "#fcfcfc", "#f5f6f8", 165),
-        ("linear", "#faf9f7", "#f2f3f5", 95),
-        ("linear", "#f7f8f6", "#eef0f2", 45),
-        ("linear", "#fef7f1", "#f4f6f9", 120),
-        ("linear", "#f9fbff", "#f1f3f8", 200),
-        ("linear", "#d1d5db", "#f9fafb", 155),
-        ("radial", "#f8f9fb", "#f2f4f6", 0),
-        ("radial", "#fdfcfb", "#f4f4f6", 0),
-    ]
+    gradient_options = []
+    if not dark_theme:
+        gradient_options = [
+            ("linear", "#fefefe", "#f7f8fb", 135),
+            ("linear", "#fcfcfc", "#f5f6f8", 165),
+            ("linear", "#faf9f7", "#f2f3f5", 95),
+            ("linear", "#f7f8f6", "#eef0f2", 45),
+            ("linear", "#fef7f1", "#f4f6f9", 120),
+            ("linear", "#f9fbff", "#f1f3f8", 200),
+            ("linear", "#d1d5db", "#f9fafb", 155),
+            ("radial", "#f8f9fb", "#f2f4f6", 0),
+            ("radial", "#fdfcfb", "#f4f4f6", 0),
+        ]
     dark_gradients = [
         ("linear", "#0b1220", "#0f172a", 135),
         ("linear", "#0f172a", "#1e293b", 160),
@@ -182,7 +184,7 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         ("linear", "#0f172a", "#312e81", 200),
     ]
     if dark_theme:
-        gradient_options.extend(dark_gradients)
+        gradient_options = dark_gradients
     if maybe(rng, 0.38 if dark_theme else 0.30):
         for _ in range(1 + (1 if maybe(rng, 0.25) else 0)):
             g_type, c1, c2, angle = pick(rng, gradient_options)
@@ -195,22 +197,40 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
                     f"radial-gradient(circle at {pick(rng, ['20% 20%', '80% 15%', '50% 40%'])}, {c1} 0%, {c2} 70%)"
                 )
 
-    pattern_overlays = [
-        "linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0) 90%)",
-        "radial-gradient(circle at 25% 20%, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0) 40%)",
-        "linear-gradient(180deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.025) 70%, rgba(0,0,0,0) 100%)",
-        "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 36%)",
-        "repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 12px)",
-        "repeating-radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 10px)",
-        "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.02) 70%, rgba(255,255,255,0) 100%)",
-        "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%)",
-    ]
+    if dark_theme:
+        pattern_overlays = [
+            "linear-gradient(120deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.035) 60%, rgba(255,255,255,0) 90%)",
+            "radial-gradient(circle at 25% 20%, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 40%)",
+            "linear-gradient(180deg, rgba(15,23,42,0.16) 0%, rgba(15,23,42,0) 40%, rgba(15,23,42,0.12) 80%, rgba(15,23,42,0) 100%)",
+            "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 36%)",
+            "repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 12px)",
+            "repeating-radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 10px)",
+            "linear-gradient(90deg, rgba(255,255,255,0.028) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.16) 70%, rgba(255,255,255,0) 100%)",
+            "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 45%)",
+        ]
 
-    noise_textures = [
-        "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.05\"/></svg>')",
-        "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"white\" opacity=\"0.08\"/><path d=\"M10 20h1v1h-1z\" fill=\"white\" opacity=\"0.06\"/></svg>')",
-        "repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
-    ]
+        noise_textures = [
+            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.03\" fill=\"#cbd5e1\"/></svg>')",
+            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"#e5e7eb\" opacity=\"0.04\"/><path d=\"M10 20h1v1h-1z\" fill=\"#cbd5e1\" opacity=\"0.035\"/></svg>')",
+            "repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
+        ]
+    else:
+        pattern_overlays = [
+            "linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0) 90%)",
+            "radial-gradient(circle at 25% 20%, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0) 40%)",
+            "linear-gradient(180deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.025) 70%, rgba(0,0,0,0) 100%)",
+            "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 36%)",
+            "repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 12px)",
+            "repeating-radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 10px)",
+            "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.02) 70%, rgba(255,255,255,0) 100%)",
+            "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%)",
+        ]
+
+        noise_textures = [
+            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.05\"/></svg>')",
+            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"white\" opacity=\"0.08\"/><path d=\"M10 20h1v1h-1z\" fill=\"white\" opacity=\"0.06\"/></svg>')",
+            "repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
+        ]
 
     if maybe(rng, 0.22):
         overlays = rng.sample(pattern_overlays, rng.randint(1, 2))
