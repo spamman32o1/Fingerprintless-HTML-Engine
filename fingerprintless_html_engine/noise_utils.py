@@ -4,6 +4,7 @@ import html
 import random
 import uuid
 from datetime import datetime, timedelta
+from typing import Callable
 
 from .random_utils import maybe, pick, rfloat, rint
 
@@ -70,9 +71,11 @@ def _random_person_name(rng: random.Random) -> str:
     return f"{pick(rng, first_names)} {pick(rng, last_names)}"
 
 
-def _random_date_string(rng: random.Random) -> str:
-    base = datetime(2015, 1, 1)
-    dt = base + timedelta(days=rint(rng, 0, 365 * 12), seconds=rint(rng, 0, 86400))
+def _random_date_string(rng: random.Random, year: int | None = None) -> str:
+    year = datetime.now().year if year is None else year
+    base = datetime(year, 1, 1)
+    span = datetime(year + 1, 1, 1) - base
+    dt = base + timedelta(seconds=rint(rng, 0, int(span.total_seconds()) - 1))
     formats = [
         "%Y-%m-%d",
         "%Y-%m-%dT%H:%M:%SZ",
@@ -495,6 +498,20 @@ def meta_noise(rng: random.Random) -> str:
     n = rint(rng, 3, 9)
     tags: list[str] = []
     seen_names: set[tuple[str, str]] = set()
+    date_year = datetime.now().year
+
+    def _date_or_date_only(rng: random.Random) -> str:
+        date_value = _random_date_string(rng, year=date_year)
+        formatter = pick(rng, [lambda v: v, lambda v: v.split("T")[0]])
+        return formatter(date_value)
+
+    date_generators: dict[tuple[str, str], Callable[[random.Random], str]] = {
+        ("name", "date"): _date_or_date_only,
+        ("name", "last-modified"): _date_or_date_only,
+        ("http-equiv", "expires"): lambda rng: _random_date_string(rng, year=date_year),
+        ("property", "article:published_time"): lambda rng: _random_date_string(rng, year=date_year),
+        ("property", "article:modified_time"): lambda rng: _random_date_string(rng, year=date_year),
+    }
 
     for _ in range(n):
         use_property = maybe(rng, 0.22)
@@ -509,11 +526,12 @@ def meta_noise(rng: random.Random) -> str:
             attr_name = "name"
             name, values = pick(rng, META_NOISE_CANDIDATES)
         name_key = (attr_name.lower(), name.lower())
-        if name_key in seen_names and not maybe(rng, 0.45):
+        if name_key in seen_names:
             continue
         content = pick(rng, values)
         if callable(content):
-            content = content(rng)
+            generator = date_generators.get(name_key)
+            content = generator(rng) if generator else content(rng)
         if maybe(rng, 0.30):
             content = f"{content}-{uuid.uuid4().hex[:6]}"
         if attr_name == "name" and maybe(rng, 0.20):
@@ -522,8 +540,6 @@ def meta_noise(rng: random.Random) -> str:
             name = _randomize_case(rng, name)
         content = _format_meta_content(rng, content)
         tags.append(_build_meta_tag(rng, attr_name, name, content))
-        if maybe(rng, 0.22):
-            tags.append(_build_meta_tag(rng, attr_name, name, content))
         seen_names.add(name_key)
 
     return "".join(tags)
