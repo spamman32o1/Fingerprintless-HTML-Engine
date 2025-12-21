@@ -168,19 +168,9 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             ],
         )
 
-    border = "none"
-    border_conditions_ok = not likely_letter_layout and not uses_stacked_wrapper
-    if border_conditions_ok and maybe(rng, 0.22):
-        border_styles = [
-            f"1px solid rgba(127,127,127,{rfloat(rng, 0.12, 0.20, 3)})",
-            f"1px dashed rgba(110,110,110,{rfloat(rng, 0.10, 0.18, 3)})",
-            f"1px solid rgba(210,210,210,{rfloat(rng, 0.12, 0.22, 3)})",
-        ]
-        border = pick(rng, border_styles)
-    else:
-        if shadow == "none":
-            shadow = pick(rng, subtle_shadows)
-        pad += rfloat(rng, 1.5, 4.0, 2)
+    if shadow == "none":
+        shadow = pick(rng, subtle_shadows)
+    pad += rfloat(rng, 1.5, 4.0, 2)
 
     text_align = None
     if maybe(rng, 0.18):
@@ -202,7 +192,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             f"padding: {pad}px;",
             f"margin: {margin_top}px auto;",
             f"border-radius: {border_rad}px;",
-            f"border: {border};",
             f"box-shadow: {shadow};",
             extra,
             f"transform: {' '.join(transforms)};",
