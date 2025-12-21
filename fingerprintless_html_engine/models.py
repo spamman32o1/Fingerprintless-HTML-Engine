@@ -17,6 +17,9 @@ class Opt:
     max_nesting: int = 4
     title_prefix: str = "Variant"
 
+    meta_noise_min: int = 4
+    meta_noise_max: int = 14
+
     ie_condition_randomize: bool = True
     structure_randomize: bool = True
 

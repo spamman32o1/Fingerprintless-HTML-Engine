@@ -32,6 +32,18 @@ def main() -> None:
         dest="structure_randomize",
         help="Disable safe wrapper structure randomization.",
     )
+    parser.add_argument(
+        "--meta-noise-min",
+        type=int,
+        default=4,
+        help="Minimum number of randomized meta tags to inject (default: 4).",
+    )
+    parser.add_argument(
+        "--meta-noise-max",
+        type=int,
+        default=14,
+        help="Maximum number of randomized meta tags to inject (default: 14).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -63,10 +75,15 @@ def main() -> None:
     synonym_groups = parse_synonym_lines(synonym_lines)
     synonym_patterns = build_synonym_patterns(synonym_groups)
 
+    meta_noise_min = max(0, args.meta_noise_min)
+    meta_noise_max = max(meta_noise_min, args.meta_noise_max)
+
     opt = Opt(
         count=count,
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
+        meta_noise_min=meta_noise_min,
+        meta_noise_max=meta_noise_max,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_mode = "single"

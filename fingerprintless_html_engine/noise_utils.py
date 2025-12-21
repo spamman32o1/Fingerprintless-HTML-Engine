@@ -497,8 +497,10 @@ def _build_meta_tag(rng: random.Random, attr_name: str, name: str, content: str)
     return f"<meta{prefix_space}{attr_block}{closing_pad}{closing}"
 
 
-def meta_noise(rng: random.Random) -> str:
-    n = rint(rng, 3, 9)
+def meta_noise(rng: random.Random, min_count: int = 4, max_count: int = 14) -> str:
+    min_count = max(0, min_count)
+    max_count = max(min_count, max_count)
+    n = rint(rng, min_count, max_count)
     tags: list[str] = []
     seen_names: set[tuple[str, str]] = set()
     date_year = datetime.now().year

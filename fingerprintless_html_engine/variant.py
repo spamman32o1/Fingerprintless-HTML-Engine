@@ -23,6 +23,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
     chunk_len_max = max(chunk_len_min, opt.chunk_len_max + rint(rng, -1, 1))
 
     noise_divs_max = max(0, opt.noise_divs_max + rint(rng, -1, 1))
+    meta_noise_min = max(0, opt.meta_noise_min + rint(rng, -2, 2))
+    meta_noise_max = max(meta_noise_min, opt.meta_noise_max + rint(rng, -2, 2))
 
     return Opt(
         count=opt.count,
@@ -33,6 +35,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         noise_divs_max=noise_divs_max,
         max_nesting=opt.max_nesting,
         title_prefix=opt.title_prefix,
+        meta_noise_min=meta_noise_min,
+        meta_noise_max=meta_noise_max,
         ie_condition_randomize=opt.ie_condition_randomize,
         structure_randomize=opt.structure_randomize,
     )
@@ -62,6 +66,7 @@ def build_variant(
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
     inner = span_wrap_html(rng, structured_html, opt, synonym_patterns)
     jsonld_scripts = build_fake_jsonld_scripts(rng)
+    meta_noise_html = meta_noise(rng, opt.meta_noise_min, opt.meta_noise_max)
 
     ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
     ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
@@ -99,6 +104,7 @@ def build_variant(
         wrapper_css=wrapper_css,
         jsonld_scripts=jsonld_scripts,
         extra_css=extra_css,
+        meta_noise_html=meta_noise_html,
     )
     return minify_output_html(rendered)
 
@@ -118,6 +124,7 @@ def build_layout_template(
     wrapper_css: str,
     jsonld_scripts: str,
     extra_css: str,
+    meta_noise_html: str,
 ) -> str:
     head_html = (
         "<!doctype html>"
@@ -126,7 +133,7 @@ def build_layout_template(
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
         "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
-        f"{meta_noise(rng)}"
+        f"{meta_noise_html}"
         f"<title>{html.escape(title)}</title>"
         "<style>"
         f"body{{{body_css}}}"
