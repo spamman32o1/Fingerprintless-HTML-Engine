@@ -2,50 +2,56 @@ from __future__ import annotations
 
 import random
 
-from .constants import BG_COLORS, FONT_STACKS, TEXT_COLORS
+from .constants import BG_COLORS, FONT_FAMILY_POOLS, TEXT_COLORS, VARIABLE_FONT_FAMILIES
 from .random_utils import maybe, pick, rfloat
 
 
+FONT_FALLBACKS = {
+    "sans": ["system-ui", "-apple-system", '"Segoe UI"', "Arial", "sans-serif"],
+    "serif": ['ui-serif', '"Times New Roman"', "Times", "serif"],
+    "mono": ["ui-monospace", '"SFMono-Regular"', "Menlo", "monospace"],
+    "cursive": ['"Comic Sans MS"', "cursive"],
+    "cjk": ["system-ui", "sans-serif"],
+}
+
+
+def _build_font_stack(rng: random.Random, pool_key: str) -> str:
+    pool = list(FONT_FAMILY_POOLS[pool_key])
+    if not pool:
+        return ", ".join(FONT_FALLBACKS[pool_key])
+
+    count = min(len(pool), rng.randint(2, 4))
+    families = rng.sample(pool, count)
+
+    variable_fonts = VARIABLE_FONT_FAMILIES.get(pool_key, [])
+    if variable_fonts and maybe(rng, 0.35):
+        variable_family = pick(rng, variable_fonts)
+        if variable_family not in families:
+            insert_at = rng.randint(0, len(families))
+            families.insert(insert_at, variable_family)
+
+    fallbacks = FONT_FALLBACKS[pool_key]
+    existing = set(families)
+    ordered = families + [fallback for fallback in fallbacks if fallback not in existing]
+    return ", ".join(ordered)
+
+
 def random_css(rng: random.Random) -> tuple[str, str, str]:
-    base_font = pick(rng, FONT_STACKS)
+    base_pool = pick(rng, list(FONT_FAMILY_POOLS))
+    base_font = _build_font_stack(rng, base_pool)
     heading_font = None
     quote_font = None
     code_font = None
 
-    heading_fonts = [
-        '"Impact", "Haettenschweiler", "Franklin Gothic Bold", "Arial Black", sans-serif',
-        '"Oswald", "Roboto Condensed", "Helvetica Condensed", "Arial Narrow", sans-serif',
-        '"Bebas Neue", "League Gothic", "Oswald", "Inter", sans-serif',
-        '"Montserrat", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif',
-        '"Roboto Slab", "Rockwell", "Clarendon", "Bookman", serif',
-        '"Arvo", "Egyptienne", "Cambria", "Book Antiqua", serif',
-        '"Arial Rounded MT Bold", "Segoe UI Rounded", Nunito, "Trebuchet MS", sans-serif',
-        pick(rng, FONT_STACKS),
-    ]
-    quote_fonts = [
-        '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Times New Roman", serif',
-        "Georgia, 'Times New Roman', Times, serif",
-        'ui-serif, "New York", "Times New Roman", serif',
-        '"Roboto Slab", "Rockwell", "Clarendon", "Bookman", serif',
-        '"Pacifico", "Segoe Script", "Comic Sans MS", "Brush Script MT", cursive',
-        '"Patrick Hand", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive',
-        '"Noto Serif CJK SC", "Songti SC", STSong, "SimSun", serif',
-    ]
-    code_fonts = [
-        'ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        'Consolas, "Liberation Mono", "Courier New", monospace',
-        '"JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-        '"Fira Code", "Source Code Pro", Menlo, Consolas, monospace',
-        '"Cascadia Code", "Segoe UI Mono", "SFMono-Regular", Menlo, Consolas, monospace',
-        '"IBM Plex Mono", "Source Code Pro", Menlo, Consolas, monospace',
-    ]
+    heading_pool_choices = ["sans", "serif", "cursive", "cjk"]
+    quote_pool_choices = ["serif", "cursive", "cjk", "sans"]
 
     if maybe(rng, 0.55):
-        heading_font = pick(rng, heading_fonts)
+        heading_font = _build_font_stack(rng, pick(rng, heading_pool_choices))
     if maybe(rng, 0.38):
-        quote_font = pick(rng, quote_fonts)
+        quote_font = _build_font_stack(rng, pick(rng, quote_pool_choices))
     if maybe(rng, 0.50):
-        code_font = pick(rng, code_fonts)
+        code_font = _build_font_stack(rng, "mono")
 
     font_size = rfloat(rng, 14.2, 16.0, 2)
     line_height = rfloat(rng, 1.36, 1.60, 3)
