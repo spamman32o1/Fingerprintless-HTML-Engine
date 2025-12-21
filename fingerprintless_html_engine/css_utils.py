@@ -12,6 +12,10 @@ FONT_FALLBACKS = {
     "mono": ["ui-monospace", '"SFMono-Regular"', "Menlo", "monospace"],
     "cursive": ['"Comic Sans MS"', "cursive"],
     "cjk": ["system-ui", "sans-serif"],
+    "display": ["system-ui", '"Segoe UI"', "Arial", "sans-serif"],
+    "humanist": ["system-ui", '"Segoe UI"', "Arial", "sans-serif"],
+    "slab": ['ui-serif', '"Times New Roman"', "Times", "serif"],
+    "handwriting": ['"Comic Sans MS"', "cursive"],
 }
 
 
@@ -24,16 +28,27 @@ def _build_font_stack(rng: random.Random, pool_key: str) -> tuple[str, bool]:
     families = rng.sample(pool, count)
 
     variable_fonts = VARIABLE_FONT_FAMILIES.get(pool_key, [])
-    if variable_fonts and maybe(rng, 0.35):
+    variable_used = False
+    if variable_fonts and maybe(rng, 0.55):
         variable_family = pick(rng, variable_fonts)
         if variable_family not in families:
             insert_at = rng.randint(0, len(families))
             families.insert(insert_at, variable_family)
+        variable_used = True
+        if maybe(rng, 0.30) and len(variable_fonts) > 1:
+            second_var = pick(rng, variable_fonts)
+            if second_var not in families:
+                families.insert(rng.randint(0, len(families)), second_var)
+    elif variable_fonts and maybe(rng, 0.20):
+        fallback_mix = pick(rng, variable_fonts)
+        if fallback_mix not in families:
+            families.append(fallback_mix)
+        variable_used = True
 
     fallbacks = FONT_FALLBACKS[pool_key]
     existing = set(families)
     ordered = families + [fallback for fallback in fallbacks if fallback not in existing]
-    variable_used = any(family in variable_fonts for family in families)
+    variable_used = variable_used or any(family in variable_fonts for family in families)
     return ", ".join(ordered), variable_used
 
 
@@ -78,8 +93,17 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     quote_is_variable = False
     code_is_variable = False
 
-    heading_pool_choices = ["sans", "serif", "cursive", "cjk"]
-    quote_pool_choices = ["serif", "cursive", "cjk", "sans"]
+    heading_pool_choices = [
+        "display",
+        "sans",
+        "serif",
+        "humanist",
+        "slab",
+        "cursive",
+        "cjk",
+    ]
+    quote_pool_choices = ["serif", "cursive", "cjk", "sans", "humanist", "handwriting"]
+    code_pool_choices = ["mono", "mono", "mono", "humanist", "sans"]
 
     if maybe(rng, 0.55):
         heading_font, heading_is_variable = _build_font_stack(
@@ -90,7 +114,7 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             rng, pick(rng, quote_pool_choices)
         )
     if maybe(rng, 0.50):
-        code_font, code_is_variable = _build_font_stack(rng, "mono")
+        code_font, code_is_variable = _build_font_stack(rng, pick(rng, code_pool_choices))
 
     font_size = (
         rfloat(rng, 11.5, 20.5, 2)
@@ -117,9 +141,25 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     pad = rfloat(rng, 8.0, 24.0, 2)
     margin_top = rfloat(rng, 6.0, 22.0, 2)
 
+    dark_theme = maybe(rng, 0.24)
+    text_palette = TEXT_COLORS if not dark_theme else [
+        "#e5e7eb",
+        "#f3f4f6",
+        "#cbd5e1",
+        "#f8fafc",
+    ]
+    bg_palette = BG_COLORS if not dark_theme else [
+        "#0b1220",
+        "#0f172a",
+        "#111827",
+        "#0d1117",
+        "#13151a",
+        "#161b22",
+    ]
+
     opacity = rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0
-    text_color = pick(rng, TEXT_COLORS)
-    bg_color = pick(rng, BG_COLORS)
+    text_color = pick(rng, text_palette)
+    bg_color = pick(rng, bg_palette)
 
     body_background_images: list[str] = []
     gradient_options = [
@@ -129,19 +169,31 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         ("linear", "#f7f8f6", "#eef0f2", 45),
         ("linear", "#fef7f1", "#f4f6f9", 120),
         ("linear", "#f9fbff", "#f1f3f8", 200),
+        ("linear", "#d1d5db", "#f9fafb", 155),
         ("radial", "#f8f9fb", "#f2f4f6", 0),
         ("radial", "#fdfcfb", "#f4f4f6", 0),
     ]
-    if maybe(rng, 0.30):
-        g_type, c1, c2, angle = pick(rng, gradient_options)
-        if g_type == "linear":
-            body_background_images.append(
-                f"linear-gradient({angle}deg, {c1} 0%, {c2} 100%)"
-            )
-        else:
-            body_background_images.append(
-                f"radial-gradient(circle at {pick(rng, ['20% 20%', '80% 15%', '50% 40%'])}, {c1} 0%, {c2} 70%)"
-            )
+    dark_gradients = [
+        ("linear", "#0b1220", "#0f172a", 135),
+        ("linear", "#0f172a", "#1e293b", 160),
+        ("linear", "#111827", "#0d1117", 95),
+        ("radial", "#0d1117", "#1f2937", 0),
+        ("linear", "#13151a", "#0b1220", 25),
+        ("linear", "#0f172a", "#312e81", 200),
+    ]
+    if dark_theme:
+        gradient_options.extend(dark_gradients)
+    if maybe(rng, 0.38 if dark_theme else 0.30):
+        for _ in range(1 + (1 if maybe(rng, 0.25) else 0)):
+            g_type, c1, c2, angle = pick(rng, gradient_options)
+            if g_type == "linear":
+                body_background_images.append(
+                    f"linear-gradient({angle}deg, {c1} 0%, {c2} 100%)"
+                )
+            else:
+                body_background_images.append(
+                    f"radial-gradient(circle at {pick(rng, ['20% 20%', '80% 15%', '50% 40%'])}, {c1} 0%, {c2} 70%)"
+                )
 
     pattern_overlays = [
         "linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0) 90%)",
@@ -151,13 +203,45 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         "repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 12px)",
         "repeating-radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 10px)",
         "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.02) 70%, rgba(255,255,255,0) 100%)",
+        "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%)",
     ]
+
+    noise_textures = [
+        "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.05\"/></svg>')",
+        "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"white\" opacity=\"0.08\"/><path d=\"M10 20h1v1h-1z\" fill=\"white\" opacity=\"0.06\"/></svg>')",
+        "repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
+    ]
+
+    if maybe(rng, 0.22):
+        overlays = rng.sample(pattern_overlays, rng.randint(1, 2))
+        body_background_images.extend(overlays)
     if maybe(rng, 0.18):
-        body_background_images.append(pick(rng, pattern_overlays))
+        body_background_images.append(pick(rng, noise_textures))
 
     use_css_vars = maybe(rng, 0.32)
-    accent_var = pick(rng, ["#0ea5e9", "#2563eb", "#16a34a", "#d97706", "#e11d48", text_color])
-    bg_var = pick(rng, BG_COLORS)
+    accent_candidates = [
+        "#0ea5e9",
+        "#2563eb",
+        "#1d4ed8",
+        "#38bdf8",
+        "#22d3ee",
+        "#16a34a",
+        "#10b981",
+        "#0f766e",
+        "#d97706",
+        "#f97316",
+        "#e11d48",
+        "#fb7185",
+        "#c084fc",
+        "#a855f7",
+        "#14b8a6",
+        "#fbbf24",
+        text_color,
+    ]
+    if dark_theme:
+        accent_candidates.extend(["#93c5fd", "#7dd3fc", "#f472b6", "#f59e0b", "#22c55e", "#c7d2fe"])
+    accent_var = pick(rng, accent_candidates)
+    bg_var = pick(rng, bg_palette)
 
     use_bg_var = use_css_vars and maybe(rng, 0.55)
     use_accent_var = use_css_vars and maybe(rng, 0.55)
@@ -176,16 +260,26 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if use_css_vars:
         body_rules.append(f"--accent: {accent_var};")
         body_rules.append(f"--bg: {bg_var};")
-    if maybe(rng, 0.28):
-        body_rules.append(f"font-weight:{pick(rng, ['300', '400', '500', '600', '700'])};")
-    if maybe(rng, 0.22):
-        body_rules.append(f"font-style:{pick(rng, ['normal', 'italic', 'oblique'])};")
+    if maybe(rng, 0.36):
+        if base_is_variable and maybe(rng, 0.55):
+            low = rng.randint(300, 480)
+            high = rng.randint(low + 80, min(900, low + 420))
+            body_rules.append(f"font-weight:{low} {high};")
+        else:
+            body_rules.append(f"font-weight:{rng.randint(300, 850)};")
+    if maybe(rng, 0.26):
+        if maybe(rng, 0.45):
+            body_rules.append(f"font-style:oblique {rng.randint(6, 18)}deg;")
+        else:
+            body_rules.append(f"font-style:{pick(rng, ['normal', 'italic', 'oblique'])};")
     if maybe(rng, 0.18):
         body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
     if maybe(rng, 0.20):
-        body_rules.append(
-            f"font-feature-settings:{pick(rng, ['\"kern\" 1, \"liga\" 1', '\"liga\" 1', '\"kern\" 1, \"onum\" 1', '\"ss01\" 1'])};"
+        feature_value = pick(
+            rng,
+            ['"kern" 1, "liga" 1', '"liga" 1', '"kern" 1, "onum" 1', '"ss01" 1'],
         )
+        body_rules.append(f"font-feature-settings:{feature_value};")
     if maybe(rng, 0.20):
         body_rules.append(
             f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
@@ -320,10 +414,17 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     extra_rules: list[str] = []
     if heading_font:
         heading_style: list[str] = [f"font-family:{heading_font};"]
-        if maybe(rng, 0.45):
-            heading_style.append(f"font-weight:{pick(rng, ['600', '700', '800', '900'])};")
-        if maybe(rng, 0.18):
-            heading_style.append("font-style:italic;")
+        if maybe(rng, 0.60):
+            if heading_is_variable and maybe(rng, 0.55):
+                low = rng.randint(450, 650)
+                high = rng.randint(low + 40, min(950, low + 260))
+                heading_style.append(f"font-weight:{low} {high};")
+            else:
+                heading_style.append(f"font-weight:{rng.randint(500, 900)};")
+        if maybe(rng, 0.24):
+            heading_style.append(
+                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(8, 16)}deg'])};"
+            )
         heading_style.extend(
             _maybe_font_details(
                 rng,
@@ -333,10 +434,17 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         extra_rules.append("h1,h2,h3,h4,h5,h6{" + "".join(heading_style) + "}")
     if quote_font:
         quote_style: list[str] = [f"font-family:{quote_font};"]
-        if maybe(rng, 0.40):
-            quote_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
-        if maybe(rng, 0.55):
-            quote_style.append("font-style:italic;")
+        if maybe(rng, 0.50):
+            if quote_is_variable and maybe(rng, 0.55):
+                low = rng.randint(350, 520)
+                high = rng.randint(low + 60, min(850, low + 260))
+                quote_style.append(f"font-weight:{low} {high};")
+            else:
+                quote_style.append(f"font-weight:{rng.randint(350, 750)};")
+        if maybe(rng, 0.60):
+            quote_style.append(
+                f"font-style:{pick(rng, ['italic', f'oblique {rng.randint(6, 14)}deg', 'normal'])};"
+            )
         quote_style.extend(
             _maybe_font_details(
                 rng,
@@ -346,10 +454,17 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         extra_rules.append("blockquote{" + "".join(quote_style) + "}")
     if code_font:
         code_style: list[str] = [f"font-family:{code_font};"]
-        if maybe(rng, 0.35):
-            code_style.append(f"font-weight:{pick(rng, ['400', '500', '600'])};")
-        if maybe(rng, 0.08):
-            code_style.append("font-style:italic;")
+        if maybe(rng, 0.44):
+            if code_is_variable and maybe(rng, 0.50):
+                low = rng.randint(350, 520)
+                high = rng.randint(low + 40, min(820, low + 200))
+                code_style.append(f"font-weight:{low} {high};")
+            else:
+                code_style.append(f"font-weight:{rng.randint(350, 720)};")
+        if maybe(rng, 0.14):
+            code_style.append(
+                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(5, 12)}deg'])};"
+            )
         code_style.extend(
             _maybe_font_details(
                 rng,
@@ -361,11 +476,21 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     accent_palette = [
         "#0ea5e9",
         "#2563eb",
+        "#1d4ed8",
+        "#38bdf8",
+        "#22d3ee",
         "#16a34a",
+        "#10b981",
+        "#0f766e",
         "#d97706",
+        "#f97316",
         "#e11d48",
+        "#fb7185",
         "#9333ea",
-        "#0ea5e9",
+        "#c084fc",
+        "#a855f7",
+        "#14b8a6",
+        "#fbbf24",
         "#0f172a",
         text_color,
     ]
