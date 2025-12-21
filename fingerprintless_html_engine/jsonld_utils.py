@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 
 from .constants import FORBIDDEN_BRAND_RE, FORBIDDEN_URL_RE, JSONLD_MUTATION_POOL
 from .random_utils import pick, rint
@@ -17,6 +18,12 @@ def _normalized_json_order(rng: random.Random, val):
     return val
 
 
+BARE_DOMAIN_RE = re.compile(r"\b(?:www\.)?[a-z0-9-]+\.(?:com|net|org|io|co)\b", re.IGNORECASE)
+SPAMMY_JSONLD_KEYS_RE = re.compile(
+    r'"(?:url|sameas|@id|offers|brand|price|product)"\s*:', re.IGNORECASE
+)
+
+
 def _violates_jsonld_guardrails(payload_text: str) -> bool:
     lower = payload_text.lower()
     if "@type" in lower or "schema.org" in lower:
@@ -28,6 +35,12 @@ def _violates_jsonld_guardrails(payload_text: str) -> bool:
     for url in FORBIDDEN_URL_RE.findall(payload_text):
         if not url.endswith(".invalid"):
             return True
+
+    if BARE_DOMAIN_RE.search(payload_text):
+        return True
+
+    if SPAMMY_JSONLD_KEYS_RE.search(payload_text):
+        return True
 
     return False
 
