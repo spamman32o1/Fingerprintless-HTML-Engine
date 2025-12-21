@@ -5,6 +5,49 @@ import re
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
 from .tag_utils import normalize_input_html
 
+INLINE_TAGS = {
+    "a",
+    "abbr",
+    "b",
+    "bdi",
+    "bdo",
+    "br",
+    "cite",
+    "code",
+    "data",
+    "dfn",
+    "em",
+    "i",
+    "img",
+    "kbd",
+    "mark",
+    "q",
+    "s",
+    "samp",
+    "small",
+    "span",
+    "strong",
+    "sub",
+    "sup",
+    "time",
+    "u",
+    "var",
+    "wbr",
+}
+INTERTAG_WHITESPACE_RE = re.compile(
+    r"(</?\s*([a-zA-Z0-9:_-]+)[^>]*>)\s+(<\s*/?\s*([a-zA-Z0-9:_-]+)[^>]*>)"
+)
+
+
+def _collapse_intertag_whitespace(html_text: str) -> str:
+    def _replacement(match: re.Match[str]) -> str:
+        left_tag, left_name, right_tag, right_name = match.group(1), match.group(2), match.group(3), match.group(4)
+        if left_name.lower() in INLINE_TAGS and right_name.lower() in INLINE_TAGS:
+            return f"{left_tag} {right_tag}"
+        return f"{left_tag}{right_tag}"
+
+    return INTERTAG_WHITESPACE_RE.sub(_replacement, html_text)
+
 
 def extract_lang(html_in: str) -> str:
     m = HTML_LANG_RE.search(html_in)
@@ -32,11 +75,14 @@ def sanitize_input_html(html_in: str) -> str:
     whitespace between tags (e.g., newlines/indentation) is collapsed from
     ">\\s+<" to "><" to avoid introducing visible gaps while leaving inline
     text unchanged.
+
+    >>> sanitize_input_html("<span>foo</span> <span>bar</span>")
+    '<span>foo</span> <span>bar</span>'
     """
 
     without_comments = re.sub(r"<!--.*?-->", "", html_in, flags=re.DOTALL)
     normalized = normalize_input_html(without_comments)
-    return re.sub(r">\s+<", "><", normalized)
+    return _collapse_intertag_whitespace(normalized)
 
 
 def minify_output_html(html_text: str) -> str:
@@ -99,5 +145,5 @@ def minify_output_html(html_text: str) -> str:
                 out.append(collapsed)
 
     minified = "".join(out)
-    minified = re.sub(r">\s+<", "><", minified)
+    minified = _collapse_intertag_whitespace(minified)
     return minified.strip()
