@@ -56,7 +56,10 @@ def build_variant(
     opt = randomize_opt_for_variant(rng, opt)
     content_html = normalize_input_html(content_html)
     content_html = replace_cellspacing_with_css(content_html)
-    body_css, wrapper_css, extra_css = random_css(rng)
+    letter_wrapped_expected = opt.wrap_chunk_rate > 0 or opt.per_word_rate > 0
+    body_css, wrapper_css, extra_css = random_css(
+        rng, stabilize_letters=letter_wrapped_expected
+    )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)

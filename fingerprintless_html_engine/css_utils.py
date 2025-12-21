@@ -6,7 +6,7 @@ from .constants import BG_COLORS, FONT_STACKS, TEXT_COLORS
 from .random_utils import maybe, pick, rfloat
 
 
-def random_css(rng: random.Random) -> tuple[str, str, str]:
+def random_css(rng: random.Random, stabilize_letters: bool = False) -> tuple[str, str, str]:
     base_font = pick(rng, FONT_STACKS)
     heading_font = None
     quote_font = None
@@ -56,9 +56,14 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     pad = rfloat(rng, 10.0, 22.0, 2)
     margin_top = rfloat(rng, 8.0, 18.0, 2)
 
-    rot = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.18) else 0.0
-    skew = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.12) else 0.0
-    scale = rfloat(rng, 0.9980, 1.0045, 4) if maybe(rng, 0.22) else 1.0
+    if stabilize_letters:
+        rot = 0.0
+        skew = 0.0
+        scale = 1.0
+    else:
+        rot = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.18) else 0.0
+        skew = rfloat(rng, -0.10, 0.10, 3) if maybe(rng, 0.12) else 0.0
+        scale = rfloat(rng, 0.9980, 1.0045, 4) if maybe(rng, 0.22) else 1.0
 
     opacity = rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0
     text_color = pick(rng, TEXT_COLORS)
@@ -134,7 +139,10 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             ],
         )
 
-    layout_mode = pick(rng, ["block", "flow-root", "flex", "grid"])
+    layout_choices = ["block", "flow-root", "flex", "grid"]
+    if stabilize_letters:
+        layout_choices = ["block", "flow-root"]
+    layout_mode = pick(rng, layout_choices)
     gap = rfloat(rng, 6.0, 14.0, 2)
     if layout_mode == "flex":
         flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
@@ -170,8 +178,11 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if maybe(rng, 0.18):
         text_align = pick(rng, ["start", "left", "center", "justify"])
 
-    translate_x = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
-    translate_y = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
+    translate_x = 0.0
+    translate_y = 0.0
+    if not stabilize_letters:
+        translate_x = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
+        translate_y = rfloat(rng, -1.5, 1.5, 3) if maybe(rng, 0.16) else 0.0
     transforms = [
         f"rotate({rot}deg)",
         f"skewX({skew}deg)",
