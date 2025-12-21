@@ -83,9 +83,16 @@ def tokenize_text_preserving_entities(text: str) -> List[tuple[str, str]]:
     return tokens
 
 
-def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
+def wrap_text_node_chunked(
+    rng: random.Random,
+    text: str,
+    opt: Opt,
+    *,
+    in_table_list: bool = False,
+) -> str:
     if not text or not text.strip():
         return text
+    allow_inline_block = not in_table_list
 
     if maybe(rng, opt.per_word_rate):
         chunks = re.split(r"(\s+)", text)
@@ -105,7 +112,10 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
                     rendered.append(html.escape(val, quote=False))
             chunk_out = "".join(rendered)
             if maybe(rng, 0.28):
-                out.append(f'<span style="{letter_style(rng)}">{chunk_out}</span>')
+                out.append(
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f"{chunk_out}</span>"
+                )
             else:
                 out.append(chunk_out)
         return "".join(out)
@@ -124,7 +134,10 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
 
         if kind == "entity":
             if maybe(rng, opt.wrap_chunk_rate * 0.30):
-                out.append(f'<span style="{letter_style(rng)}">{val}</span>')
+                out.append(
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f"{val}</span>"
+                )
             else:
                 out.append(val)
             i += 1
@@ -146,7 +159,10 @@ def wrap_text_node_chunked(rng: random.Random, text: str, opt: Opt) -> str:
                 chunk.append(html.escape(v, quote=False))
                 j += 1
             if chunk:
-                out.append(f'<span style="{letter_style(rng)}">{"".join(chunk)}</span>')
+                out.append(
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f'{"".join(chunk)}</span>'
+                )
                 i = j
                 continue
 
@@ -169,6 +185,19 @@ def span_wrap_html(
 
     skip_depth = 0
     skip_tag_stack: List[str] = []
+    table_list_depth = 0
+    table_list_stack: List[str] = []
+    table_list_tags = {
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "td",
+        "th",
+        "ul",
+        "ol",
+        "li",
+    }
     tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
 
     for part in parts:
@@ -193,9 +222,18 @@ def span_wrap_html(
                         if skip_tag_stack and skip_tag_stack[-1] == name:
                             skip_tag_stack.pop()
                             skip_depth = max(0, skip_depth - 1)
+                if name in table_list_tags and not is_self_close:
+                    if not is_close:
+                        table_list_depth += 1
+                        table_list_stack.append(name)
+                    else:
+                        if table_list_stack and table_list_stack[-1] == name:
+                            table_list_stack.pop()
+                            table_list_depth = max(0, table_list_depth - 1)
             continue
 
         # text node
+        in_table_list = table_list_depth > 0
         if skip_depth > 0:
             if skip_tag_stack and skip_tag_stack[-1] == "a":
                 segments = TEMPLATE_SPLIT_RE.split(part)
@@ -207,7 +245,14 @@ def span_wrap_html(
                         continue
                     normalized = normalize_text_whitespace(segment)
                     with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
-                    out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
+                    out.append(
+                        wrap_text_node_chunked(
+                            rng,
+                            with_synonyms,
+                            opt,
+                            in_table_list=in_table_list,
+                        )
+                    )
             else:
                 out.append(part)
         else:
@@ -222,6 +267,13 @@ def span_wrap_html(
                 if not normalized.strip():
                     continue
                 with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
-                out.append(wrap_text_node_chunked(rng, with_synonyms, opt))
+                out.append(
+                    wrap_text_node_chunked(
+                        rng,
+                        with_synonyms,
+                        opt,
+                        in_table_list=in_table_list,
+                    )
+                )
 
     return "".join(out)
