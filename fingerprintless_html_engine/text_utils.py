@@ -36,9 +36,21 @@ def apply_synonyms(text: str, rng: random.Random, patterns: List[Tuple[re.Patter
     if not patterns:
         return text
 
+    def apply_casing(match_text: str, replacement: str) -> str:
+        if match_text.isupper():
+            return replacement.upper()
+        if match_text.islower():
+            return replacement.lower()
+        if match_text.istitle():
+            return replacement.title()
+        return replacement
+
     updated = text
     for pattern, options in patterns:
-        updated = pattern.sub(lambda _: pick(rng, options), updated)
+        updated = pattern.sub(
+            lambda match: apply_casing(match.group(0), pick(rng, options)),
+            updated,
+        )
     return updated
 
 
