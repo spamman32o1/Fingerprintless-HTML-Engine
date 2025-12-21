@@ -23,6 +23,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
     chunk_len_max = max(chunk_len_min, opt.chunk_len_max + rint(rng, -1, 1))
 
     noise_divs_max = max(0, opt.noise_divs_max + rint(rng, -1, 1))
+    nesting_jitter = max(0, opt.max_nesting_jitter)
+    max_nesting = max(1, opt.max_nesting + rint(rng, -nesting_jitter, nesting_jitter))
 
     return Opt(
         count=opt.count,
@@ -31,7 +33,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         chunk_len_max=chunk_len_max,
         per_word_rate=_clamp_rate(opt.per_word_rate * word_factor),
         noise_divs_max=noise_divs_max,
-        max_nesting=opt.max_nesting,
+        max_nesting=max_nesting,
+        max_nesting_jitter=opt.max_nesting_jitter,
         title_prefix=opt.title_prefix,
         ie_condition_randomize=opt.ie_condition_randomize,
         structure_randomize=opt.structure_randomize,

@@ -32,6 +32,18 @@ def main() -> None:
         dest="structure_randomize",
         help="Disable safe wrapper structure randomization.",
     )
+    parser.add_argument(
+        "--max-nesting",
+        type=int,
+        default=None,
+        help="Base maximum nesting depth for wrapper divs (default: 4).",
+    )
+    parser.add_argument(
+        "--max-nesting-jitter",
+        type=int,
+        default=0,
+        help="Random +/- jitter applied to max nesting per variant (default: 0).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -63,10 +75,16 @@ def main() -> None:
     synonym_groups = parse_synonym_lines(synonym_lines)
     synonym_patterns = build_synonym_patterns(synonym_groups)
 
+    base_max_nesting = args.max_nesting
+    if base_max_nesting is None:
+        base_max_nesting = Opt(count=count).max_nesting
+
     opt = Opt(
         count=count,
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
+        max_nesting=base_max_nesting,
+        max_nesting_jitter=max(0, args.max_nesting_jitter),
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_mode = "single"
