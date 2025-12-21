@@ -93,6 +93,16 @@ JSONLD_MUTATION_POOL = [
     [{}],
     {"x": 1},
     {"seed": "a9"},
+    {"meta": {"v": 1}},
+    {"flags": [0, 1]},
+    {"note": "x"},
+    {"data": [{"k": "v"}]},
+    {"count": 0},
+    {"ok": True},
+    {"values": [1, 2, 3]},
+    {"nested": {"a": {"b": 1}}},
+    {"tags": ["a", "b"]},
+    {"pair": [False, 1]},
 ]
 
 FORBIDDEN_BRAND_RE = re.compile(
