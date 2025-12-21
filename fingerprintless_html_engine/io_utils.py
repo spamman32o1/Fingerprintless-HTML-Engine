@@ -41,7 +41,18 @@ def _parse_input_paths(raw_input: str) -> list[Path]:
     if not cleaned:
         return []
     parts = [_clean_path_text(part) for part in cleaned.split(",")]
-    return [Path(part) for part in parts if part]
+    paths: list[Path] = []
+    for part in parts:
+        if not part:
+            continue
+        expanded = os.path.expandvars(os.path.expanduser(part))
+        path = Path(expanded)
+        try:
+            normalized = path.resolve()
+        except OSError:
+            normalized = path
+        paths.append(normalized)
+    return paths
 
 
 def _pick_windows_files() -> list[Path]:
