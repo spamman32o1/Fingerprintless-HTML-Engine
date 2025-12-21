@@ -87,15 +87,35 @@ def _random_date_string(rng: random.Random, year: int | None = None) -> str:
     return dt.strftime(pick(rng, formats))
 
 
-def noise_divs(rng: random.Random, nmax: int) -> str:
+def noise_divs(
+    rng: random.Random,
+    nmax: int,
+    allow_inline: bool = True,
+    allow_block: bool = True,
+) -> str:
     n = rint(rng, 0, max(0, nmax))
     bits = []
+
+    if not allow_inline and not allow_block:
+        return ""
+
     def random_rgba(alpha_min: float, alpha_max: float) -> str:
         r = rint(rng, 20, 240)
         g = rint(rng, 20, 240)
         b = rint(rng, 20, 240)
         a = rfloat(rng, alpha_min, alpha_max, 2)
         return f"rgba({r},{g},{b},{a})"
+
+    def random_clip_path() -> str:
+        if maybe(rng, 0.5):
+            inset_values = [f"{rfloat(rng, 0.0, 30.0, 2)}%" for _ in range(4)]
+            return f"inset({' '.join(inset_values)})"
+        points = []
+        for _ in range(rint(rng, 3, 7)):
+            x = rfloat(rng, 0.0, 100.0, 2)
+            y = rfloat(rng, 0.0, 100.0, 2)
+            points.append(f"{x}% {y}%")
+        return f"polygon({', '.join(points)})"
 
     def random_size() -> str:
         unit = pick(rng, ["px", "em", "rem", "%"])
@@ -110,7 +130,12 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
         return f"{value}{unit}"
 
     for _ in range(n):
-
+        element_options = []
+        if allow_block:
+            element_options.extend(["div", "section", "article", "aside", "p"])
+        if allow_inline:
+            element_options.extend(["span", "i", "em", "b", "small", "s"])
+        tag = pick(rng, element_options)
         h = rfloat(rng, 0.0, 8.5, 2)
         mt = rfloat(rng, 0.0, 8.5, 2)
         mb = rfloat(rng, 0.0, 8.5, 2)
@@ -124,7 +149,12 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
             min_w = rfloat(rng, 40.0, max(41.0, max_w - 10.0), 2)
             styles.append(f"min-width:{min_w}px")
         if maybe(rng, 0.35):
-            display = pick(rng, ["block", "inline-block", "inline", "flex", "inline-flex"])
+            display_options = []
+            if allow_block:
+                display_options.extend(["block", "flex", "flow-root"])
+            if allow_inline:
+                display_options.extend(["inline", "inline-block", "inline-flex"])
+            display = pick(rng, display_options)
             styles.append(f"display:{display}")
             if display in {"flex", "inline-flex"} and maybe(rng, 0.70):
                 styles.append(f"gap:{rfloat(rng, 0.0, 12.0, 2)}px")
@@ -161,6 +191,9 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
             styles.append(f"min-height:{random_size()}")
         if maybe(rng, 0.25):
             styles.append(f"max-height:{random_size()}")
+        if maybe(rng, 0.22):
+            styles.append(f"z-index:{rint(rng, -4, 14)}")
+            styles.append(pick(rng, ["position:relative", "position:relative;isolation:isolate"]))
         if maybe(rng, 0.25):
             filters = []
             if maybe(rng, 0.65):
@@ -185,6 +218,10 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
                 )
             if transforms:
                 styles.append(f"transform:{' '.join(transforms)}")
+        if maybe(rng, 0.25):
+            styles.append(f"mix-blend-mode:{pick(rng, ['multiply', 'screen', 'overlay', 'soft-light', 'darken'])}")
+        if maybe(rng, 0.20):
+            styles.append(f"clip-path:{random_clip_path()}")
 
         attrs = []
         if maybe(rng, 0.80):
@@ -202,9 +239,73 @@ def noise_divs(rng: random.Random, nmax: int) -> str:
         if maybe(rng, 0.35):
             attrs.append(f'data-noise="{uuid.uuid4().hex[: rint(rng, 4, 8)]}"')
 
+        extra_style_blocks = []
+        assigned_class = None
+        if maybe(rng, 0.40):
+            assigned_class = f"noise-{uuid.uuid4().hex[:8]}"
+            attrs.append(f'class="{assigned_class}"')
+
+        def pseudo_rule(pseudo: str) -> str:
+            if not assigned_class:
+                return ""
+            pseudo_styles = ["content:''", "position:absolute", "inset:0"]
+            if maybe(rng, 0.65):
+                pseudo_styles.append(f"opacity:{rfloat(rng, 0.08, 0.4, 2)}")
+            if maybe(rng, 0.50):
+                pseudo_styles.append(f"background:{random_rgba(0.05, 0.25)}")
+            if maybe(rng, 0.45):
+                pseudo_styles.append(f"mix-blend-mode:{pick(rng, ['color-burn', 'lighten', 'difference'])}")
+            if maybe(rng, 0.30):
+                pseudo_styles.append(f"filter:blur({rfloat(rng, 0.4, 2.4, 2)}px)")
+            if maybe(rng, 0.30):
+                pseudo_styles.append(f"clip-path:{random_clip_path()}")
+            return f".{assigned_class}::{pseudo}{{{';'.join(pseudo_styles)};}}"
+
+        pseudo_blocks = []
+        if maybe(rng, 0.35):
+            rule = pseudo_rule("before")
+            if rule:
+                pseudo_blocks.append(rule)
+        if maybe(rng, 0.30):
+            rule = pseudo_rule("after")
+            if rule:
+                pseudo_blocks.append(rule)
+        if pseudo_blocks:
+            extra_style_blocks.append("<style>" + "".join(pseudo_blocks) + "</style>")
+
+        if maybe(rng, 0.28):
+            anim_name = f"noiseAnim{uuid.uuid4().hex[:6]}"
+            translate_from = rfloat(rng, -8.0, 8.0, 2)
+            translate_to = rfloat(rng, -8.0, 8.0, 2)
+            scale_from = rfloat(rng, 0.85, 1.05, 2)
+            scale_to = rfloat(rng, 0.95, 1.15, 2)
+            animation_rule = (
+                f"@keyframes {anim_name}{{"
+                f"0%{{transform:translate({translate_from}px,0) scale({scale_from});opacity:{rfloat(rng,0.6,1.0,2)};}}"
+                f"100%{{transform:translate({translate_to}px,0) scale({scale_to});opacity:{rfloat(rng,0.4,1.0,2)};}}"
+                f"}}"
+            )
+            extra_style_blocks.append(f"<style>{animation_rule}</style>")
+            styles.append(
+                f"animation:{anim_name} {rfloat(rng, 2.0, 8.0, 2)}s {pick(rng, ['ease-in-out', 'linear', 'ease'])} infinite alternate"
+            )
+
+        if assigned_class and maybe(rng, 0.20):
+            layering_rule = (
+                f".{assigned_class}{{mix-blend-mode:{pick(rng, ['hue', 'color', 'saturation'])};"
+                f"backdrop-filter:blur({rfloat(rng, 0.0, 2.5, 2)}px);}}"
+            )
+            extra_style_blocks.append(f"<style>{layering_rule}</style>")
+
         attrs_str = f" {' '.join(attrs)}" if attrs else ""
         style_str = ";".join(styles)
-        bits.append(f"<div{attrs_str} style=\"{style_str};\"></div>")
+        tag_open = f"<{tag}{attrs_str} style=\"{style_str};\">"
+        tag_close = f"</{tag}>"
+        element_html = f"{tag_open}{tag_close}"
+        if extra_style_blocks:
+            bits.append("".join(extra_style_blocks) + element_html)
+        else:
+            bits.append(element_html)
     return "".join(bits)
 
 
