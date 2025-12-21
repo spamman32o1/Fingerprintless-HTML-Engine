@@ -72,10 +72,13 @@ def _random_person_name(rng: random.Random) -> str:
 
 
 def _random_date_string(rng: random.Random, year: int | None = None) -> str:
-    year = datetime.now().year if year is None else year
+    now = datetime.now()
+    year = now.year if year is None else year
     base = datetime(year, 1, 1)
-    span = datetime(year + 1, 1, 1) - base
-    dt = base + timedelta(seconds=rint(rng, 0, int(span.total_seconds()) - 1))
+    end_of_year = datetime(year + 1, 1, 1)
+    upper_bound = min(end_of_year, now) if year == now.year else end_of_year
+    span_seconds = max(1, int((upper_bound - base).total_seconds()))
+    dt = base + timedelta(seconds=rint(rng, 0, span_seconds - 1))
     formats = [
         "%Y-%m-%d",
         "%Y-%m-%dT%H:%M:%SZ",
