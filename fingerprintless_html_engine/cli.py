@@ -83,6 +83,32 @@ def main() -> None:
 
     rng = random.Random()
 
+    def _sanitize_token(value: str) -> str:
+        cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value)
+        cleaned = cleaned.strip("_")
+        return cleaned or "input"
+
+    filename_prefixes: dict[Path, str] = {}
+    if output_mode == "same":
+        stem_counts: dict[str, int] = {}
+        for input_path in input_paths:
+            stem_counts[input_path.stem] = stem_counts.get(input_path.stem, 0) + 1
+
+        prefix_seen: dict[str, int] = {}
+        for input_path in input_paths:
+            stem = input_path.stem
+            if stem_counts[stem] == 1:
+                prefix = f"{stem}_"
+            else:
+                parent_token = _sanitize_token(input_path.parent.name or "root")
+                prefix = f"{stem}_{parent_token}_"
+
+            count = prefix_seen.get(prefix, 0)
+            if count:
+                prefix = f"{prefix}{count + 1}_"
+            prefix_seen[prefix] = count + 1
+            filename_prefixes[input_path] = prefix
+
     output_locations: list[Path] = []
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
@@ -96,7 +122,7 @@ def main() -> None:
             filename_prefix = ""
         else:
             outdir = base_outdir
-            filename_prefix = f"{input_path.stem}_"
+            filename_prefix = filename_prefixes.get(input_path, f"{input_path.stem}_")
 
         for i in range(1, opt.count + 1):
             variant_title = random_title()
