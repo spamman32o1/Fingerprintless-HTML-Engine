@@ -727,6 +727,14 @@ def letter_style(rng: random.Random) -> str:
 
     rot = rfloat(rng, -0.20, 0.20, 3) if maybe(rng, 0.05) else 0.0
 
+    display_rule = "display:inline;"
+    if maybe(rng, 0.10):
+        display_rule = "display:inline-block;"
+
+    whitespace_rule = ""
+    if maybe(rng, 0.12):
+        whitespace_rule = "white-space:nowrap;"
+
     font_variation = ""
     if maybe(rng, 0.05):
         font_variation = (
@@ -740,7 +748,7 @@ def letter_style(rng: random.Random) -> str:
         f"opacity:{op};"
         f"{font_variation}"
         f"position:relative;top:{dy}px;"
-        f"display:inline-block;"
-        "white-space:nowrap;"
+        f"{display_rule}"
+        f"{whitespace_rule}"
         f"transform:rotate({rot}deg);"
     )
