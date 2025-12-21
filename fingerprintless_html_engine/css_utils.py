@@ -717,7 +717,7 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     return body_css, wrapper_css, "".join(extra_rules)
 
 
-def letter_style(rng: random.Random) -> str:
+def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
     fs = rfloat(rng, 0.998, 1.008, 4)
     ls = rfloat(rng, -0.008, 0.020, 4)
     op = rfloat(rng, 0.970, 1.0, 3) if maybe(rng, 0.14) else 1.0
@@ -728,11 +728,11 @@ def letter_style(rng: random.Random) -> str:
     rot = rfloat(rng, -0.20, 0.20, 3) if maybe(rng, 0.05) else 0.0
 
     display_rule = "display:inline;"
-    if maybe(rng, 0.10):
+    if allow_inline_block and maybe(rng, 0.10):
         display_rule = "display:inline-block;"
 
     whitespace_rule = ""
-    if maybe(rng, 0.12):
+    if allow_inline_block and maybe(rng, 0.12):
         whitespace_rule = "white-space:nowrap;"
 
     font_variation = ""
