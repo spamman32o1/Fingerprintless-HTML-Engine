@@ -117,13 +117,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     pad = rfloat(rng, 8.0, 24.0, 2)
     margin_top = rfloat(rng, 6.0, 22.0, 2)
 
-    rot = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.18) else 0.0
-    skew = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.12) else 0.0
-    skew_y = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.10) else 0.0
-    scale = rfloat(rng, 0.9960, 1.0065, 4) if maybe(rng, 0.22) else 1.0
-    scale_x = rfloat(rng, 0.985, 1.020, 4) if maybe(rng, 0.10) else 1.0
-    scale_y = rfloat(rng, 0.985, 1.020, 4) if maybe(rng, 0.10) else 1.0
-
     opacity = rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0
     text_color = pick(rng, TEXT_COLORS)
     bg_color = pick(rng, BG_COLORS)
@@ -284,19 +277,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if maybe(rng, 0.18):
         text_align = pick(rng, ["start", "left", "center", "justify"])
 
-    translate_x = rfloat(rng, -2.5, 2.5, 3) if maybe(rng, 0.16) else 0.0
-    translate_y = rfloat(rng, -2.5, 2.5, 3) if maybe(rng, 0.16) else 0.0
-    transforms = [
-        f"rotate({rot}deg)",
-        f"skewX({skew}deg)",
-        f"skewY({skew_y}deg)",
-        f"scale({scale})",
-        f"scaleX({scale_x})",
-        f"scaleY({scale_y})",
-    ]
-    if translate_x or translate_y:
-        transforms.insert(0, f"translate({translate_x}px, {translate_y}px)")
-
     pad_y = pad
     pad_x = pad
     pad_top = pad
@@ -333,8 +313,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
             f"border: {border};",
             f"box-shadow: {shadow};",
             extra,
-            f"transform: {' '.join(transforms)};",
-            "transform-origin: top left;",
             f"text-align: {text_align};" if text_align else "",
         ]
     )
