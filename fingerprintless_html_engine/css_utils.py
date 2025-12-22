@@ -729,7 +729,7 @@ def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
 
     display_rule = "display:inline;"
     if allow_inline_block and maybe(rng, 0.10):
-        display_rule = "display:inline-block;"
+        display_rule = "display:inline-block;vertical-align:middle;"
 
     whitespace_rule = ""
     if allow_inline_block and maybe(rng, 0.12):
