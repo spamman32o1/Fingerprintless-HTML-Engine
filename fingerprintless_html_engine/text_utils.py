@@ -265,6 +265,7 @@ def span_wrap_html(
                     continue
                 normalized = normalize_text_whitespace(segment)
                 if not normalized.strip():
+                    out.append(normalized)
                     continue
                 with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
                 out.append(
