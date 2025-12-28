@@ -27,6 +27,29 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 
 The script outputs a timestamped `variants_YYYYMMDD_HHMMSS` directory filled with variant HTML files.
 
+### 🧭 CLI Options
+Run `./script.py --help` to see all flags. Common switches include:
+
+- `--encoding`: Set input HTML encoding (default `utf-8`, with fallbacks to `latin-1` and `windows-1252`).
+- `--no-ie-conditional-comments`: Disable randomized IE conditional comment blocks.
+- `--no-structure-randomize`: Disable wrapper structure shuffling.
+- `--max-nesting`: Override maximum wrapper nesting depth.
+- `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
+
+### 📂 Multiple Inputs
+If you supply multiple input files, the engine will prompt to place outputs in a shared
+`variants_YYYYMMDD_HHMMSS` folder (with filename prefixes), or in distinct folders per input.
+
+### 🧪 Example
+```bash
+./script.py --max-nesting 6 --max-nesting-jitter 2
+```
+```text
+Enter HTML file path: samples/page.html
+How many variants? 5
+Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
+```
+
 ## 🧾 Metanoise
 Every generated variant automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:
 
