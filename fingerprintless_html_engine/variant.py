@@ -177,7 +177,9 @@ def build_layout_template(
         before_inner = before
         after_body = after
 
-    content_inner = f"{open_wrap}{before_inner}<div class=\"{content_class}\">{inner}</div>{after_inner}{close_wrap}"
+    content_inner = (
+        f"{open_wrap}{before_inner}<div class=\"{content_class}\">{inner}</div>{after_inner}{close_wrap}"
+    )
 
     def build_wrapper(content_html: str) -> str:
         wrapper_open = f"<div class=\"{wrapper_class}\">"
@@ -191,9 +193,10 @@ def build_layout_template(
             wrapper_close = f"</{wrap_tag}>{wrapper_close}"
         return f"{wrapper_open}{content_html}{wrapper_close}"
 
+    use_outer_layer = maybe(rng, 0.35)
     outer_layer_open = ""
     outer_layer_close = ""
-    if maybe(rng, 0.35):
+    if use_outer_layer:
         outer_tag = pick(rng, ["section", "div"])
         role = ""
         if outer_tag == "div" and maybe(rng, 0.5):
@@ -201,35 +204,29 @@ def build_layout_template(
         outer_layer_open = f"<{outer_tag}{role}>"
         outer_layer_close = f"</{outer_tag}>"
 
-    wrapper_default = build_wrapper(content_inner)
-    wrapper_with_inner_table = build_wrapper(f"{inner_table_open}{content_inner}{inner_table_close}")
-    wrapper_with_commented_table = build_wrapper(
-        f"{table_fallback_open}{inner_table_open}{content_inner}{inner_table_close}{table_fallback_close}"
+    layout_choice = pick(
+        rng,
+        [
+            "outer-table",
+            "outer-table-fallback",
+            "outer-table-inner",
+            "inner-only",
+            "plain",
+        ],
     )
+    use_outer_table = layout_choice in {"outer-table", "outer-table-fallback", "outer-table-inner"}
+    use_inner_table = layout_choice in {"outer-table-inner", "inner-only"}
+    use_commented_table = layout_choice == "outer-table-fallback"
 
-    templates = [
-        lambda: (
-            f"{head_html}<body>{before_body}{outer_table_open}{table_fallback_open}"
-            f"{outer_layer_open}{wrapper_default}{outer_layer_close}{table_fallback_close}"
-            f"{outer_table_close}{after_body}</body></html>"
-        ),
-        lambda: (
-            f"{head_html}<body>{before_body}{outer_layer_open}{wrapper_default}"
-            f"{outer_layer_close}{after_body}</body></html>"
-        ),
-        lambda: (
-            f"{head_html}<body>{before_body}{outer_table_open}{outer_layer_open}"
-            f"{wrapper_with_inner_table}{outer_layer_close}{outer_table_close}{after_body}</body></html>"
-        ),
-        lambda: (
-            f"{head_html}<body>{before_body}{outer_layer_open}{wrapper_with_commented_table}"
-            f"{outer_layer_close}{after_body}</body></html>"
-        ),
-        lambda: (
-            f"{head_html}<body>{before_body}{table_fallback_open}{outer_table_open}{outer_layer_open}"
-            f"{wrapper_default}{outer_layer_close}{outer_table_close}{table_fallback_close}"
-            f"{after_body}</body></html>"
-        ),
-    ]
+    wrapper_default = build_wrapper(content_inner)
+    body_inner = wrapper_default
+    if use_inner_table:
+        body_inner = f"{inner_table_open}{body_inner}{inner_table_close}"
 
-    return pick(rng, templates)()
+    outer_container = f"{outer_layer_open}{body_inner}{outer_layer_close}"
+    if use_outer_table:
+        outer_container = f"{outer_table_open}{outer_container}{outer_table_close}"
+        if use_commented_table:
+            outer_container = f"{table_fallback_open}{outer_container}{table_fallback_close}"
+
+    return f"{head_html}<body>{before_body}{outer_container}{after_body}</body></html>"
