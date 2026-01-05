@@ -38,6 +38,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         title_prefix=opt.title_prefix,
         ie_condition_randomize=opt.ie_condition_randomize,
         structure_randomize=opt.structure_randomize,
+        output_mode=opt.output_mode,
     )
 
 
@@ -59,7 +60,7 @@ def build_variant(
     opt = randomize_opt_for_variant(rng, opt)
     content_html = normalize_input_html(content_html)
     content_html = replace_cellspacing_with_css(content_html)
-    body_css, wrapper_css, extra_css = random_css(rng)
+    body_css, wrapper_css, extra_css = random_css(rng, opt.output_mode)
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
@@ -102,6 +103,7 @@ def build_variant(
         wrapper_css=wrapper_css,
         jsonld_scripts=jsonld_scripts,
         extra_css=extra_css,
+        output_mode=opt.output_mode,
     )
     return minify_output_html(rendered)
 
@@ -121,7 +123,22 @@ def build_layout_template(
     wrapper_css: str,
     jsonld_scripts: str,
     extra_css: str,
+    output_mode: str,
 ) -> str:
+    jp_mode = output_mode == "jp"
+    body_style_attr = f' style="{body_css}"' if jp_mode else ""
+    wrapper_style_attr = f' style="{wrapper_css}"' if jp_mode else ""
+    wrapper_class_attr = f' class="{wrapper_class}"' if not jp_mode else ""
+    content_class_attr = f' class="{content_class}"' if not jp_mode else ""
+    style_block = (
+        ""
+        if jp_mode
+        else "<style>"
+        f"body{{{body_css}}}"
+        f".{wrapper_class}{{{wrapper_css}}}"
+        f"{extra_css}"
+        "</style>"
+    )
     head_html = (
         "<!doctype html>"
         f"<html lang=\"{html.escape(lang, quote=True)}\">"
@@ -131,11 +148,7 @@ def build_layout_template(
         "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
         f"{meta_noise(rng)}"
         f"<title>{html.escape(title)}</title>"
-        "<style>"
-        f"body{{{body_css}}}"
-        f".{wrapper_class}{{{wrapper_css}}}"
-        f"{extra_css}"
-        "</style>"
+        f"{style_block}"
         f"{jsonld_scripts}"
         "</head>"
     )
@@ -178,11 +191,11 @@ def build_layout_template(
         after_body = after
 
     content_inner = (
-        f"{open_wrap}{before_inner}<div class=\"{content_class}\">{inner}</div>{after_inner}{close_wrap}"
+        f"{open_wrap}{before_inner}<div{content_class_attr}>{inner}</div>{after_inner}{close_wrap}"
     )
 
     def build_wrapper(content_html: str) -> str:
-        wrapper_open = f"<div class=\"{wrapper_class}\">"
+        wrapper_open = f"<div{wrapper_class_attr}{wrapper_style_attr}>"
         wrapper_close = "</div>"
         if maybe(rng, 0.45):
             wrap_tag = pick(rng, ["section", "div"])
@@ -229,4 +242,4 @@ def build_layout_template(
         if use_commented_table:
             outer_container = f"{table_fallback_open}{outer_container}{table_fallback_close}"
 
-    return f"{head_html}<body>{before_body}{outer_container}{after_body}</body></html>"
+    return f"{head_html}<body{body_style_attr}>{before_body}{outer_container}{after_body}</body></html>"

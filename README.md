@@ -38,6 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
+- `--output-mode` / `--mode`: Choose `default` or `jp` output mode (default: `default`).
 
 ### 📂 Multiple Inputs
 If you supply multiple input files, the engine will prompt to place outputs in a shared
@@ -45,12 +46,27 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 
 ### 🧪 Example
 ```bash
-./script.py --max-nesting 6 --max-nesting-jitter 2
+./script.py --max-nesting 6 --max-nesting-jitter 2 --output-mode default
 ```
 ```text
 Enter HTML file path: samples/page.html
 How many variants? 5
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
+```
+
+## 🇯🇵 JP Output Mode (Docomo-Friendly)
+Use `--output-mode jp` to generate variants optimized for stricter Japanese mobile clients
+where CSS support is limited (e.g., Docomo). Compared to the default Gmail-friendly output:
+
+- **No `<style>` block**: essential styles are moved inline on wrapper/container elements.
+- **No `@media` usage**: responsive media queries are omitted.
+- **No `max-width` or `border-radius`**: avoids unsupported layout and rounding rules.
+- **Reduced class-based styling**: fewer class selectors, inline styles preferred.
+- **Tables still allowed**: table-based layouts remain intact for email compatibility.
+
+Example:
+```bash
+./script.py --output-mode jp
 ```
 
 ## 🧾 Metanoise

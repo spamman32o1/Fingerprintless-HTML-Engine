@@ -83,7 +83,8 @@ def _maybe_font_details(
     return rules
 
 
-def random_css(rng: random.Random) -> tuple[str, str, str]:
+def random_css(rng: random.Random, output_mode: str = "default") -> tuple[str, str, str]:
+    jp_mode = output_mode == "jp"
     base_pool = pick(rng, list(FONT_FAMILY_POOLS))
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
     heading_font = None
@@ -414,22 +415,26 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
     if maybe(rng, 0.22):
         margin_pattern = f"{margin_top}px {margin_side}px {margin_bottom}px"
 
-    wrapper_css = " ".join(
+    wrapper_rules = []
+    if not jp_mode:
+        wrapper_rules.append(f"max-width: {max_w}px;")
+    wrapper_rules.extend(
         [
-            f"max-width: {max_w}px;",
             (
                 f"padding: {pad_y}px {pad_x}px;"
                 if maybe(rng, 0.55)
                 else f"padding: {pad_top}px {pad_right}px {pad_bottom}px {pad_left}px;"
             ),
             f"margin: {margin_pattern};",
-            f"border-radius: {border_rad}px;",
-            f"border: {border};",
-            f"box-shadow: {shadow};",
-            extra,
-            f"text-align: {text_align};" if text_align else "",
         ]
     )
+    if not jp_mode:
+        wrapper_rules.append(f"border-radius: {border_rad}px;")
+    wrapper_rules.extend([f"border: {border};", f"box-shadow: {shadow};", extra])
+    if text_align:
+        wrapper_rules.append(f"text-align: {text_align};")
+
+    wrapper_css = " ".join(wrapper_rules)
 
     extra_rules: list[str] = []
     if heading_font:
@@ -626,7 +631,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
 
     button_bg = "var(--accent)" if use_accent_var and maybe(rng, 0.40) else pick(rng, accent_palette)
     button_fg = pick(rng, [text_color, "#ffffff", "#111827"])
-    button_radius = rfloat(rng, 6.0, 12.0, 2)
     button_border = pick(
         rng,
         [
@@ -648,7 +652,6 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         "button,input[type=button],input[type=submit],input[type=reset]{"
         + f"background:{button_bg};"
         + f"color:{button_fg};"
-        + f"border-radius:{button_radius}px;"
         + f"border:{button_border};"
         + f"padding:{rfloat(rng, 7.0, 11.0, 2)}px {rfloat(rng, 12.0, 18.0, 2)}px;"
         + f"font-weight:{pick(rng, ['500', '600', '700'])};"
@@ -657,6 +660,12 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         + "cursor:pointer;"
         + "}"
     )
+    if not jp_mode:
+        button_radius = rfloat(rng, 6.0, 12.0, 2)
+        button_rule = button_rule.replace(
+            "border:",
+            f"border-radius:{button_radius}px;border:",
+        )
     extra_rules.append(button_rule)
 
     button_hover = [f"background:{pick(rng, accent_palette)};"]
@@ -690,14 +699,16 @@ def random_css(rng: random.Random) -> tuple[str, str, str]:
         + "letter-spacing:0.01em;"
         + "}"
     )
-    extra_rules.append(
+    mark_rule = (
         "mark{"
         + f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
         + f"color:{pick(rng, [text_color, '#111827'])};"
         + "padding:0 2px;"
-        + "border-radius:3px;"
-        + "}"
     )
+    if not jp_mode:
+        mark_rule += "border-radius:3px;"
+    mark_rule += "}"
+    extra_rules.append(mark_rule)
     extra_rules.append(
         "abbr{"
         + f"border-bottom:1px {pick(rng, ['dotted', 'dashed', 'solid'])} {inline_accent_color};"

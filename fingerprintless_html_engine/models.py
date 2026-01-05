@@ -20,6 +20,7 @@ class Opt:
 
     ie_condition_randomize: bool = True
     structure_randomize: bool = True
+    output_mode: str = "default"
 
 
 @dataclass
