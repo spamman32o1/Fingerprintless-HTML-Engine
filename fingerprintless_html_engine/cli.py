@@ -44,6 +44,14 @@ def main() -> None:
         default=0,
         help="Random +/- jitter applied to max nesting per variant (default: 0).",
     )
+    parser.add_argument(
+        "--output-mode",
+        "--mode",
+        dest="output_mode",
+        choices=["default", "jp"],
+        default="default",
+        help="Rendering mode for output HTML (default: default, options: default, jp).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -85,18 +93,19 @@ def main() -> None:
         structure_randomize=args.structure_randomize,
         max_nesting=base_max_nesting,
         max_nesting_jitter=max(0, args.max_nesting_jitter),
+        output_mode=args.output_mode,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_mode = "single"
+    output_path_mode = "single"
     if len(input_paths) > 1:
         use_same = _prompt_yes_no(
             "Multiple input files detected. Use the same output folder for all? y/n (default y): ",
             default=True,
         )
-        output_mode = "same" if use_same else "different"
+        output_path_mode = "same" if use_same else "different"
 
     base_outdir = Path(f"variants_{ts}")
-    if output_mode in {"single", "same"}:
+    if output_path_mode in {"single", "same"}:
         base_outdir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random()
@@ -107,7 +116,7 @@ def main() -> None:
         return cleaned or "input"
 
     filename_prefixes: dict[Path, str] = {}
-    if output_mode == "same":
+    if output_path_mode == "same":
         stem_counts: dict[str, int] = {}
         for input_path in input_paths:
             stem_counts[input_path.stem] = stem_counts.get(input_path.stem, 0) + 1
@@ -134,7 +143,7 @@ def main() -> None:
         content = extract_body_content(sanitized)
         lang = extract_lang(sanitized)
 
-        if output_mode == "different":
+        if output_path_mode == "different":
             outdir = Path(f"variants_{ts}_{input_path.stem}")
             outdir.mkdir(parents=True, exist_ok=True)
             filename_prefix = ""
@@ -149,7 +158,7 @@ def main() -> None:
 
         output_locations.append(outdir.resolve())
 
-    if output_mode == "same":
+    if output_path_mode == "same":
         print(f"\nDone. Wrote {opt.count * len(input_paths)} files to: {base_outdir.resolve()}")
     else:
         for outdir in output_locations:
