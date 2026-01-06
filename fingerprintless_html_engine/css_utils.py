@@ -83,7 +83,12 @@ def _maybe_font_details(
     return rules
 
 
-def random_css(rng: random.Random, output_mode: str = "default") -> tuple[str, str, str]:
+def random_css(
+    rng: random.Random,
+    output_mode: str = "default",
+    *,
+    allow_dark_mode: bool = True,
+) -> tuple[str, str, str]:
     jp_mode = output_mode == "jp"
     base_pool = pick(rng, list(FONT_FAMILY_POOLS))
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
@@ -142,7 +147,7 @@ def random_css(rng: random.Random, output_mode: str = "default") -> tuple[str, s
     pad = rfloat(rng, 8.0, 24.0, 2)
     margin_top = rfloat(rng, 6.0, 22.0, 2)
 
-    dark_theme = maybe(rng, 0.24)
+    dark_theme = maybe(rng, 0.24) if allow_dark_mode else False
     text_palette = TEXT_COLORS if not dark_theme else [
         "#e5e7eb",
         "#f3f4f6",

@@ -39,6 +39,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         ie_condition_randomize=opt.ie_condition_randomize,
         structure_randomize=opt.structure_randomize,
         output_mode=opt.output_mode,
+        allow_dark_mode=opt.allow_dark_mode,
     )
 
 
@@ -60,7 +61,11 @@ def build_variant(
     opt = randomize_opt_for_variant(rng, opt)
     content_html = normalize_input_html(content_html)
     content_html = replace_cellspacing_with_css(content_html)
-    body_css, wrapper_css, extra_css = random_css(rng, opt.output_mode)
+    body_css, wrapper_css, extra_css = random_css(
+        rng,
+        opt.output_mode,
+        allow_dark_mode=opt.allow_dark_mode,
+    )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
