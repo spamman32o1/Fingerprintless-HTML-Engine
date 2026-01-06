@@ -52,6 +52,12 @@ def main() -> None:
         default="default",
         help="Rendering mode for output HTML (default: default, options: default, jp).",
     )
+    parser.add_argument(
+        "--no-dark-mode",
+        action="store_false",
+        dest="allow_dark_mode",
+        help="Disable dark theme styling.",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -94,6 +100,7 @@ def main() -> None:
         max_nesting=base_max_nesting,
         max_nesting_jitter=max(0, args.max_nesting_jitter),
         output_mode=args.output_mode,
+        allow_dark_mode=args.allow_dark_mode,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"
