@@ -59,7 +59,7 @@ def build_variant(
     if synonym_patterns is None:
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
-    content_html = normalize_input_html(content_html)
+    content_html = normalize_input_html(content_html, jp_mode=opt.output_mode == "jp")
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css = random_css(
         rng,

@@ -163,7 +163,7 @@ def _normalize_center_tag(tag: str) -> str:
     return f"<div{slash}>"
 
 
-def _normalize_table_td_attrs(tag: str) -> str:
+def _normalize_table_td_attrs(tag: str, *, jp_mode: bool = False) -> str:
     if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
         return tag
 
@@ -172,7 +172,10 @@ def _normalize_table_td_attrs(tag: str) -> str:
         return tag
 
     name, rest = m.group(1), m.group(2)
-    if name.lower() not in {"table", "td"} or not rest.strip():
+    tag_name = name.lower()
+    if tag_name not in {"table", "td", "th"}:
+        return tag
+    if not rest.strip() and not jp_mode:
         return tag
 
     trailing_slash = rest.rstrip().endswith("/")
@@ -219,7 +222,7 @@ def _normalize_table_td_attrs(tag: str) -> str:
         updated_attrs.append(raw)
 
     if align_value:
-        if name.lower() == "table":
+        if tag_name == "table":
             if align_value == "center":
                 additions.append(("margin-left", "auto"))
                 additions.append(("margin-right", "auto"))
@@ -232,11 +235,77 @@ def _normalize_table_td_attrs(tag: str) -> str:
         else:
             additions.append(("text-align", align_value))
 
+    if jp_mode:
+        if tag_name == "table":
+            additions.append(("width", "100%"))
+            additions.append(("border-collapse", "collapse"))
+        else:
+            additions.append(("text-align", "left"))
+
     if not additions and style_value is None and len(updated_attrs) == len(attrs):
         return tag
 
     merged_style = _merge_style_value(style_value, additions)
     if merged_style or style_value is not None or additions:
+        updated_attrs.append(f'style="{merged_style}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
+
+
+def _normalize_list_attrs(tag: str, *, jp_mode: bool = False) -> str:
+    if not jp_mode:
+        return tag
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    tag_name = name.lower()
+    if tag_name not in {"ul", "ol"}:
+        return tag
+    if not rest.strip():
+        trailing_slash = rest.rstrip().endswith("/")
+        merged_style = _merge_style_value(
+            None,
+            [
+                ("list-style-position", "outside"),
+                ("padding-left", "20px"),
+            ],
+        )
+        if merged_style:
+            return f'<{name} style="{merged_style}"{" /" if trailing_slash else ""}>'
+        return tag
+
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    updated_attrs: list[str] = []
+    style_value: str | None = None
+
+    for attr_name, raw, value in attrs:
+        if attr_name.lower() == "style":
+            style_value = value or ""
+            continue
+        updated_attrs.append(raw)
+
+    merged_style = _merge_style_value(
+        style_value,
+        [
+            ("list-style-position", "outside"),
+            ("padding-left", "20px"),
+        ],
+    )
+    if merged_style or style_value is not None:
         updated_attrs.append(f'style="{merged_style}"')
 
     attr_str = " ".join(updated_attrs).strip()
@@ -323,7 +392,7 @@ def normalize_table_cellspacing(tag: str) -> str:
     return f"<{name}{slash}>"
 
 
-def normalize_input_html(html_in: str) -> str:
+def normalize_input_html(html_in: str, *, jp_mode: bool = False) -> str:
     from .constants import TAG_SPLIT_RE
 
     parts = TAG_SPLIT_RE.split(html_in)
@@ -334,7 +403,8 @@ def normalize_input_html(html_in: str) -> str:
             continue
         if part.startswith("<") and part.endswith(">"):
             normalized = _normalize_center_tag(part)
-            normalized = _normalize_table_td_attrs(normalized)
+            normalized = _normalize_table_td_attrs(normalized, jp_mode=jp_mode)
+            normalized = _normalize_list_attrs(normalized, jp_mode=jp_mode)
             out.append(normalized)
         else:
             out.append(part)
