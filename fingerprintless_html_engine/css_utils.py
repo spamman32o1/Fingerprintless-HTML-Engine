@@ -361,15 +361,18 @@ def random_css(
             ],
         )
 
-    layout_mode = pick(rng, ["block", "flow-root", "flex", "grid"])
+    layout_modes = ["block", "flow-root"]
+    if not jp_mode:
+        layout_modes.extend(["flex", "grid"])
+    layout_mode = pick(rng, layout_modes)
     gap = rfloat(rng, 6.0, 14.0, 2)
     if layout_mode == "flex":
         flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
-        if maybe(rng, 0.24):
+        if maybe(rng, 0.24) and not jp_mode:
             flex_props.append(
                 f"align-items:{pick(rng, ['stretch', 'flex-start', 'center'])};"
             )
-        if maybe(rng, 0.22):
+        if maybe(rng, 0.22) and not jp_mode:
             flex_props.append(
                 f"justify-content:{pick(rng, ['flex-start', 'space-between', 'center'])};"
             )
@@ -381,11 +384,11 @@ def random_css(
             grid_props.append(
                 f"grid-template-columns: repeat({columns}, minmax(0, 1fr));"
             )
-        if maybe(rng, 0.30):
+        if maybe(rng, 0.30) and not jp_mode:
             grid_props.append(
                 f"justify-items:{pick(rng, ['start', 'stretch', 'center'])};"
             )
-        if maybe(rng, 0.22):
+        if maybe(rng, 0.22) and not jp_mode:
             grid_props.append(
                 f"align-items:{pick(rng, ['start', 'stretch', 'center'])};"
             )
