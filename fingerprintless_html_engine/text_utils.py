@@ -6,10 +6,10 @@ import re
 from typing import List, Tuple
 
 from .constants import ENTITY_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
-from .css_utils import letter_style
+from .css_utils import InlineStyleRules, letter_style
 from .models import Opt
 from .random_utils import maybe, pick, rint
-from .tag_utils import normalize_table_cellspacing, reorder_tag_attributes
+from .tag_utils import apply_inline_styles, normalize_table_cellspacing, reorder_tag_attributes
 
 
 def parse_synonym_lines(lines: List[str]) -> List[List[str]]:
@@ -177,6 +177,8 @@ def span_wrap_html(
     html_in: str,
     opt: Opt,
     synonym_patterns: List[Tuple[re.Pattern, List[str]]] | None = None,
+    *,
+    inline_styles: InlineStyleRules | None = None,
 ) -> str:
     if synonym_patterns is None:
         synonym_patterns = []
@@ -200,13 +202,74 @@ def span_wrap_html(
     }
     tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
 
+    table_body_stack: list[int] = []
+
     for part in parts:
         if not part:
             continue
 
         if part.startswith("<") and part.endswith(">"):
             normalized_tag = normalize_table_cellspacing(part)
-            reordered_tag = reorder_tag_attributes(rng, normalized_tag)
+            styled_tag = normalized_tag
+            m = tagname_re.match(normalized_tag)
+            is_close = False
+            is_self_close = False
+            name = None
+            if m:
+                name = m.group(1).lower()
+                is_close = normalized_tag.startswith("</")
+                is_self_close = normalized_tag.rstrip().endswith("/>")
+                if inline_styles and not is_close:
+                    additions: list[tuple[str, str]] = []
+                    if name in {"h1", "h2", "h3", "h4", "h5", "h6"} and inline_styles.headings:
+                        additions.extend(inline_styles.headings)
+                    elif name == "blockquote" and inline_styles.blockquote:
+                        additions.extend(inline_styles.blockquote)
+                    elif name in {"code", "pre", "kbd", "samp"} and inline_styles.code:
+                        additions.extend(inline_styles.code)
+                    elif name == "a" and inline_styles.link:
+                        additions.extend(inline_styles.link)
+                    elif name in {"ul", "ol"} and inline_styles.list_style:
+                        additions.extend(inline_styles.list_style)
+                    elif name == "table" and inline_styles.table:
+                        additions.extend(inline_styles.table)
+                    elif name == "th" and inline_styles.th:
+                        additions.extend(inline_styles.th)
+                    elif name == "td" and inline_styles.cell:
+                        additions.extend(inline_styles.cell)
+                    elif name == "caption" and inline_styles.caption:
+                        additions.extend(inline_styles.caption)
+                    elif name == "button" and inline_styles.button:
+                        additions.extend(inline_styles.button)
+                    elif name == "input" and inline_styles.button:
+                        if re.search(
+                            r'type\\s*=\\s*(\"|\\\')?(button|submit|reset)\\1',
+                            normalized_tag,
+                            re.IGNORECASE,
+                        ):
+                            additions.extend(inline_styles.button)
+                    elif name in {"small", "sub", "sup"} and inline_styles.small:
+                        additions.extend(inline_styles.small)
+                    elif name == "mark" and inline_styles.mark:
+                        additions.extend(inline_styles.mark)
+                    elif name == "abbr" and inline_styles.abbr:
+                        additions.extend(inline_styles.abbr)
+                    elif name in {"cite", "em"} and inline_styles.cite_em:
+                        additions.extend(inline_styles.cite_em)
+                    if name == "tr" and inline_styles.table_stripe and table_body_stack:
+                        table_body_stack[-1] += 1
+                        if table_body_stack[-1] % 2 == 0:
+                            additions.extend(inline_styles.table_stripe)
+                    if additions:
+                        styled_tag = apply_inline_styles(normalized_tag, additions)
+
+            if m and name == "tbody" and not is_self_close:
+                if not is_close:
+                    table_body_stack.append(0)
+                elif table_body_stack:
+                    table_body_stack.pop()
+
+            reordered_tag = reorder_tag_attributes(rng, styled_tag)
             out.append(reordered_tag)
             m = tagname_re.match(reordered_tag)
             if m:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import random
 
 from .constants import BG_COLORS, FONT_FAMILY_POOLS, TEXT_COLORS, VARIABLE_FONT_FAMILIES
@@ -17,6 +18,39 @@ FONT_FALLBACKS = {
     "slab": ['ui-serif', '"Times New Roman"', "Times", "serif"],
     "handwriting": ['"Comic Sans MS"', "cursive"],
 }
+
+
+@dataclass(frozen=True)
+class InlineStyleRules:
+    headings: tuple[tuple[str, str], ...] | None
+    blockquote: tuple[tuple[str, str], ...] | None
+    code: tuple[tuple[str, str], ...] | None
+    link: tuple[tuple[str, str], ...]
+    list_style: tuple[tuple[str, str], ...]
+    table: tuple[tuple[str, str], ...]
+    cell: tuple[tuple[str, str], ...]
+    th: tuple[tuple[str, str], ...]
+    table_stripe: tuple[tuple[str, str], ...] | None
+    caption: tuple[tuple[str, str], ...] | None
+    button: tuple[tuple[str, str], ...]
+    small: tuple[tuple[str, str], ...]
+    mark: tuple[tuple[str, str], ...]
+    abbr: tuple[tuple[str, str], ...]
+    cite_em: tuple[tuple[str, str], ...] | None
+
+
+def _rules_to_inline(rule_text: str) -> tuple[tuple[str, str], ...]:
+    if not rule_text:
+        return tuple()
+    inline: list[tuple[str, str]] = []
+    for part in rule_text.split(";"):
+        if not part.strip():
+            continue
+        if ":" not in part:
+            continue
+        prop, value = part.split(":", 1)
+        inline.append((prop.strip(), value.strip()))
+    return tuple(inline)
 
 
 def _build_font_stack(rng: random.Random, pool_key: str) -> tuple[str, bool]:
@@ -88,7 +122,7 @@ def random_css(
     output_mode: str = "default",
     *,
     allow_dark_mode: bool = True,
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, InlineStyleRules]:
     jp_mode = output_mode == "jp"
     base_pool = pick(rng, list(FONT_FAMILY_POOLS))
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
@@ -445,6 +479,9 @@ def random_css(
     wrapper_css = " ".join(wrapper_rules)
 
     extra_rules: list[str] = []
+    heading_inline: tuple[tuple[str, str], ...] | None = None
+    quote_inline: tuple[tuple[str, str], ...] | None = None
+    code_inline: tuple[tuple[str, str], ...] | None = None
     if heading_font:
         heading_style: list[str] = [f"font-family:{heading_font};"]
         if maybe(rng, 0.60):
@@ -464,7 +501,9 @@ def random_css(
                 allow_variations=heading_is_variable,
             )
         )
-        extra_rules.append("h1,h2,h3,h4,h5,h6{" + "".join(heading_style) + "}")
+        heading_style_text = "".join(heading_style)
+        extra_rules.append("h1,h2,h3,h4,h5,h6{" + heading_style_text + "}")
+        heading_inline = _rules_to_inline(heading_style_text)
     if quote_font:
         quote_style: list[str] = [f"font-family:{quote_font};"]
         if maybe(rng, 0.50):
@@ -484,7 +523,9 @@ def random_css(
                 allow_variations=quote_is_variable,
             )
         )
-        extra_rules.append("blockquote{" + "".join(quote_style) + "}")
+        quote_style_text = "".join(quote_style)
+        extra_rules.append("blockquote{" + quote_style_text + "}")
+        quote_inline = _rules_to_inline(quote_style_text)
     if code_font:
         code_style: list[str] = [f"font-family:{code_font};"]
         if maybe(rng, 0.44):
@@ -504,7 +545,9 @@ def random_css(
                 allow_variations=code_is_variable,
             )
         )
-        extra_rules.append("code,pre,kbd,samp{" + "".join(code_style) + "}")
+        code_style_text = "".join(code_style)
+        extra_rules.append("code,pre,kbd,samp{" + code_style_text + "}")
+        code_inline = _rules_to_inline(code_style_text)
 
     accent_palette = [
         "#0ea5e9",
@@ -569,7 +612,8 @@ def random_css(
     if maybe(rng, 0.36):
         active_rules.append("opacity:0.92;")
 
-    extra_rules.append("a{" + "".join(link_rules) + "}")
+    link_style_text = "".join(rule for rule in link_rules if rule)
+    extra_rules.append("a{" + link_style_text + "}")
     extra_rules.append("a:hover{" + "".join(hover_rules) + "}")
     extra_rules.append("a:active{" + "".join(active_rules) + "}")
 
@@ -584,14 +628,13 @@ def random_css(
     list_style_type = pick(rng, list_styles)
     list_style_position = pick(rng, ["inside", "outside"])
     list_spacing = rfloat(rng, 0.35, 0.8, 2)
-    extra_rules.append(
-        "ul,ol{"
-        + f"list-style-type:{list_style_type};"
-        + f"list-style-position:{list_style_position};"
-        + f"padding-left:{rfloat(rng, 16.0, 28.0, 2)}px;"
-        + f"margin-block:{list_spacing}em;"
-        + "}"
+    list_style_text = (
+        f"list-style-type:{list_style_type};"
+        f"list-style-position:{list_style_position};"
+        f"padding-left:{rfloat(rng, 16.0, 28.0, 2)}px;"
+        f"margin-block:{list_spacing}em;"
     )
+    extra_rules.append("ul,ol{" + list_style_text + "}")
     if maybe(rng, 0.30):
         extra_rules.append(
             "ul li::marker, ol li::marker{"
@@ -607,35 +650,31 @@ def random_css(
         "border-collapse:collapse;" if maybe(rng, 0.55) else "border-collapse:separate;",
         f"border:{rfloat(rng, 0.5, 1.2, 2)}px solid {border_color};",
     ]
-    extra_rules.append("table{" + "".join(table_rule_parts) + "}")
+    table_style_text = "".join(table_rule_parts)
+    extra_rules.append("table{" + table_style_text + "}")
     cell_padding = rfloat(rng, 8.0, 14.0, 2)
-    extra_rules.append(
-        "th,td{"
-        + f"padding:{cell_padding}px;"
-        + "text-align:left;"
-        + "}"
-    )
-    extra_rules.append(
-        "th{"
-        + f"background-color:rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)});"
+    cell_style_text = f"padding:{cell_padding}px;" "text-align:left;"
+    extra_rules.append("th,td{" + cell_style_text + "}")
+    th_style_text = (
+        f"background-color:rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)});"
         + ("font-weight:700;" if maybe(rng, 0.55) else "")
-        + "}"
     )
+    extra_rules.append("th{" + th_style_text + "}")
+    stripe_inline: tuple[tuple[str, str], ...] | None = None
     if maybe(rng, 0.60):
-        extra_rules.append(
-            "tbody tr:nth-child(even){"
-            + f"background-color:{stripe_color};"
-            + "}"
-        )
+        stripe_style_text = f"background-color:{stripe_color};"
+        extra_rules.append("tbody tr:nth-child(even){" + stripe_style_text + "}")
+        stripe_inline = _rules_to_inline(stripe_style_text)
+    caption_inline: tuple[tuple[str, str], ...] | None = None
     if maybe(rng, 0.28):
-        extra_rules.append(
-            "table caption{"
-            + f"caption-side:{pick(rng, ['top', 'bottom'])};"
-            + f"color:{pick(rng, accent_palette)};"
-            + f"font-style:{pick(rng, ['normal', 'italic'])};"
-            + "padding:6px;"
-            + "}"
+        caption_style_text = (
+            f"caption-side:{pick(rng, ['top', 'bottom'])};"
+            f"color:{pick(rng, accent_palette)};"
+            f"font-style:{pick(rng, ['normal', 'italic'])};"
+            "padding:6px;"
         )
+        extra_rules.append("table caption{" + caption_style_text + "}")
+        caption_inline = _rules_to_inline(caption_style_text)
 
     button_bg = "var(--accent)" if use_accent_var and maybe(rng, 0.40) else pick(rng, accent_palette)
     button_fg = pick(rng, [text_color, "#ffffff", "#111827"])
@@ -656,23 +695,32 @@ def random_css(
         ],
     )
 
+    button_style_parts = [
+        f"background:{button_bg};",
+        f"color:{button_fg};",
+        f"border:{button_border};",
+        f"padding:{rfloat(rng, 7.0, 11.0, 2)}px {rfloat(rng, 12.0, 18.0, 2)}px;",
+        f"font-weight:{pick(rng, ['500', '600', '700'])};",
+        f"box-shadow:{button_shadow};",
+        transition_rule if maybe(rng, 0.75) else "",
+        "cursor:pointer;",
+    ]
+    button_style_text = "".join(part for part in button_style_parts if part)
     button_rule = (
         "button,input[type=button],input[type=submit],input[type=reset]{"
-        + f"background:{button_bg};"
-        + f"color:{button_fg};"
-        + f"border:{button_border};"
-        + f"padding:{rfloat(rng, 7.0, 11.0, 2)}px {rfloat(rng, 12.0, 18.0, 2)}px;"
-        + f"font-weight:{pick(rng, ['500', '600', '700'])};"
-        + f"box-shadow:{button_shadow};"
-        + (transition_rule if maybe(rng, 0.75) else "")
-        + "cursor:pointer;"
+        + button_style_text
         + "}"
     )
     if not jp_mode:
         button_radius = rfloat(rng, 6.0, 12.0, 2)
-        button_rule = button_rule.replace(
+        button_style_text = button_style_text.replace(
             "border:",
             f"border-radius:{button_radius}px;border:",
+        )
+        button_rule = (
+            "button,input[type=button],input[type=submit],input[type=reset]{"
+            + button_style_text
+            + "}"
         )
     extra_rules.append(button_rule)
 
@@ -700,40 +748,54 @@ def random_css(
     )
 
     inline_accent_color = pick(rng, accent_palette)
-    extra_rules.append(
-        "small,sub,sup{"
-        + f"color:{inline_accent_color};"
+    small_style_text = (
+        f"color:{inline_accent_color};"
         + (f"font-weight:{pick(rng, ['500', '600'])};" if maybe(rng, 0.40) else "")
         + "letter-spacing:0.01em;"
-        + "}"
     )
-    mark_rule = (
-        "mark{"
-        + f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
-        + f"color:{pick(rng, [text_color, '#111827'])};"
-        + "padding:0 2px;"
+    extra_rules.append("small,sub,sup{" + small_style_text + "}")
+    mark_style_text = (
+        f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
+        f"color:{pick(rng, [text_color, '#111827'])};"
+        "padding:0 2px;"
     )
+    mark_rule = "mark{" + mark_style_text
     if not jp_mode:
         mark_rule += "border-radius:3px;"
     mark_rule += "}"
     extra_rules.append(mark_rule)
-    extra_rules.append(
-        "abbr{"
-        + f"border-bottom:1px {pick(rng, ['dotted', 'dashed', 'solid'])} {inline_accent_color};"
-        + f"text-decoration-color:{inline_accent_color};"
-        + "text-decoration-skip-ink:auto;"
-        + "cursor:help;"
-        + "}"
+    abbr_style_text = (
+        f"border-bottom:1px {pick(rng, ['dotted', 'dashed', 'solid'])} {inline_accent_color};"
+        f"text-decoration-color:{inline_accent_color};"
+        "text-decoration-skip-ink:auto;"
+        "cursor:help;"
     )
+    extra_rules.append("abbr{" + abbr_style_text + "}")
+    cite_inline: tuple[tuple[str, str], ...] | None = None
     if maybe(rng, 0.26):
-        extra_rules.append(
-            "cite,em{"
-            + f"color:{pick(rng, accent_palette)};"
-            + "font-style:italic;"
-            + "}"
-        )
+        cite_style_text = f"color:{pick(rng, accent_palette)};" "font-style:italic;"
+        extra_rules.append("cite,em{" + cite_style_text + "}")
+        cite_inline = _rules_to_inline(cite_style_text)
 
-    return body_css, wrapper_css, "".join(extra_rules)
+    inline_styles = InlineStyleRules(
+        headings=heading_inline,
+        blockquote=quote_inline,
+        code=code_inline,
+        link=_rules_to_inline(link_style_text),
+        list_style=_rules_to_inline(list_style_text),
+        table=_rules_to_inline(table_style_text),
+        cell=_rules_to_inline(cell_style_text),
+        th=_rules_to_inline(th_style_text),
+        table_stripe=stripe_inline,
+        caption=caption_inline,
+        button=_rules_to_inline(button_style_text),
+        small=_rules_to_inline(small_style_text),
+        mark=_rules_to_inline(mark_style_text),
+        abbr=_rules_to_inline(abbr_style_text),
+        cite_em=cite_inline,
+    )
+
+    return body_css, wrapper_css, "".join(extra_rules), inline_styles
 
 
 def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
