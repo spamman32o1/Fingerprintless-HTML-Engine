@@ -61,7 +61,7 @@ def build_variant(
     opt = randomize_opt_for_variant(rng, opt)
     content_html = normalize_input_html(content_html, jp_mode=opt.output_mode == "jp")
     content_html = replace_cellspacing_with_css(content_html)
-    body_css, wrapper_css, extra_css = random_css(
+    body_css, wrapper_css, extra_css, inline_styles = random_css(
         rng,
         opt.output_mode,
         allow_dark_mode=opt.allow_dark_mode,
@@ -69,7 +69,13 @@ def build_variant(
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
-    inner = span_wrap_html(rng, structured_html, opt, synonym_patterns)
+    inner = span_wrap_html(
+        rng,
+        structured_html,
+        opt,
+        synonym_patterns,
+        inline_styles=inline_styles if opt.output_mode == "jp" else None,
+    )
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
     ie_before = ie_noise_block(rng, opt.ie_condition_randomize)

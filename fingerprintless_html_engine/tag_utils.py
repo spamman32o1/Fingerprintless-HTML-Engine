@@ -86,6 +86,42 @@ def _parse_tag_attrs(attr_text: str) -> list[tuple[str, str, str | None]]:
     return attrs
 
 
+def apply_inline_styles(tag: str, additions: list[tuple[str, str]]) -> str:
+    if not additions:
+        return tag
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    updated_attrs: list[str] = []
+    style_value: str | None = None
+    for attr_name, raw, value in attrs:
+        if attr_name.lower() == "style":
+            style_value = value or ""
+            continue
+        updated_attrs.append(raw)
+
+    merged_style = _merge_style_value(style_value, additions)
+    if merged_style or style_value is not None:
+        updated_attrs.append(f'style="{merged_style}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
+
+
 def reorder_tag_attributes(rng, tag: str) -> str:
     """Shuffle attributes within a start/self-closing tag while preserving values."""
 
