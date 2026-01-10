@@ -161,11 +161,14 @@ def random_css(
         if maybe(rng, 0.12)
         else rfloat(rng, 13.2, 17.4, 2)
     )
-    line_height = (
-        rfloat(rng, 1.05, 2.10, 3)
-        if maybe(rng, 0.14)
-        else rfloat(rng, 1.22, 1.78, 3)
-    )
+    if output_mode in {"default", "jp"}:
+        line_height = rfloat(rng, 1.10, 1.50, 3)
+    else:
+        line_height = (
+            rfloat(rng, 1.05, 2.10, 3)
+            if maybe(rng, 0.14)
+            else rfloat(rng, 1.22, 1.78, 3)
+        )
     letter_spacing = (
         rfloat(rng, -0.060, 0.080, 4)
         if maybe(rng, 0.16)
@@ -825,6 +828,7 @@ def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
 
     return (
         f"font-size:{fs}em;"
+        "line-height:1;"
         f"letter-spacing:{ls}em;"
         f"opacity:{op};"
         f"{font_variation}"
