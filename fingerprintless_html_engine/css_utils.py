@@ -87,9 +87,9 @@ def _build_font_stack(rng: random.Random, pool_key: str) -> tuple[str, bool]:
 
 
 def _font_variation_settings(rng: random.Random) -> str:
-    wght = rng.randint(350, 750)
-    wdth = rng.randint(85, 115)
-    slnt = rng.randint(-10, 0)
+    wght = rng.randint(380, 620)
+    wdth = rng.randint(92, 108)
+    slnt = rng.randint(-6, 0)
     return (
         'font-variation-settings: "wght" '
         f"{wght}, "
@@ -112,8 +112,8 @@ def _maybe_font_details(
         rules.append(f"font-optical-sizing:{pick(rng, ['auto', 'none'])};")
     if maybe(rng, 0.35):
         rules.append(f"font-kerning:{pick(rng, ['auto', 'normal', 'none'])};")
-    if maybe(rng, 0.35):
-        rules.append(f"font-stretch:{rfloat(rng, 85.0, 115.0, 1)}%;")
+    if maybe(rng, 0.12):
+        rules.append(f"font-stretch:{rfloat(rng, 95.0, 105.0, 1)}%;")
     return rules
 
 
@@ -322,16 +322,16 @@ def random_css(
         body_rules.append(f"--bg: {bg_var};")
     if maybe(rng, 0.36):
         if base_is_variable and maybe(rng, 0.55):
-            low = rng.randint(300, 480)
-            high = rng.randint(low + 80, min(900, low + 420))
+            low = rng.randint(380, 520)
+            high = rng.randint(low + 40, min(650, low + 160))
             body_rules.append(f"font-weight:{low} {high};")
         else:
-            body_rules.append(f"font-weight:{rng.randint(300, 850)};")
+            body_rules.append(f"font-weight:{rng.randint(380, 620)};")
     if maybe(rng, 0.26):
         if maybe(rng, 0.45):
-            body_rules.append(f"font-style:oblique {rng.randint(6, 18)}deg;")
+            body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
         else:
-            body_rules.append(f"font-style:{pick(rng, ['normal', 'italic', 'oblique'])};")
+            body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
     if maybe(rng, 0.18):
         body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
     if maybe(rng, 0.20):
@@ -486,14 +486,14 @@ def random_css(
         heading_style: list[str] = [f"font-family:{heading_font};"]
         if maybe(rng, 0.60):
             if heading_is_variable and maybe(rng, 0.55):
-                low = rng.randint(450, 650)
-                high = rng.randint(low + 40, min(950, low + 260))
+                low = rng.randint(420, 560)
+                high = rng.randint(low + 30, min(680, low + 140))
                 heading_style.append(f"font-weight:{low} {high};")
             else:
-                heading_style.append(f"font-weight:{rng.randint(500, 900)};")
+                heading_style.append(f"font-weight:{rng.randint(430, 620)};")
         if maybe(rng, 0.24):
             heading_style.append(
-                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(8, 16)}deg'])};"
+                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(5, 9)}deg'])};"
             )
         heading_style.extend(
             _maybe_font_details(
@@ -508,14 +508,14 @@ def random_css(
         quote_style: list[str] = [f"font-family:{quote_font};"]
         if maybe(rng, 0.50):
             if quote_is_variable and maybe(rng, 0.55):
-                low = rng.randint(350, 520)
-                high = rng.randint(low + 60, min(850, low + 260))
+                low = rng.randint(380, 520)
+                high = rng.randint(low + 40, min(640, low + 140))
                 quote_style.append(f"font-weight:{low} {high};")
             else:
-                quote_style.append(f"font-weight:{rng.randint(350, 750)};")
+                quote_style.append(f"font-weight:{rng.randint(380, 600)};")
         if maybe(rng, 0.60):
             quote_style.append(
-                f"font-style:{pick(rng, ['italic', f'oblique {rng.randint(6, 14)}deg', 'normal'])};"
+                f"font-style:{pick(rng, ['italic', f'oblique {rng.randint(4, 8)}deg', 'normal'])};"
             )
         quote_style.extend(
             _maybe_font_details(
@@ -530,14 +530,14 @@ def random_css(
         code_style: list[str] = [f"font-family:{code_font};"]
         if maybe(rng, 0.44):
             if code_is_variable and maybe(rng, 0.50):
-                low = rng.randint(350, 520)
-                high = rng.randint(low + 40, min(820, low + 200))
+                low = rng.randint(380, 520)
+                high = rng.randint(low + 30, min(640, low + 120))
                 code_style.append(f"font-weight:{low} {high};")
             else:
-                code_style.append(f"font-weight:{rng.randint(350, 720)};")
+                code_style.append(f"font-weight:{rng.randint(380, 600)};")
         if maybe(rng, 0.14):
             code_style.append(
-                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(5, 12)}deg'])};"
+                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(4, 7)}deg'])};"
             )
         code_style.extend(
             _maybe_font_details(
