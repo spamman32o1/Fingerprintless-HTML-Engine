@@ -92,6 +92,7 @@ def noise_divs(
     nmax: int,
     allow_inline: bool = True,
     allow_block: bool = True,
+    allow_animations: bool = False,
 ) -> str:
     n = rint(rng, 0, max(0, nmax))
     bits = []
@@ -278,7 +279,7 @@ def noise_divs(
         if pseudo_blocks:
             extra_style_blocks.append("<style>" + "".join(pseudo_blocks) + "</style>")
 
-        if maybe(rng, 0.28):
+        if allow_animations and maybe(rng, 0.28):
             anim_name = f"nAnim{uuid.uuid4().hex[:6]}"
             translate_from = rfloat(rng, -8.0, 8.0, 2)
             translate_to = rfloat(rng, -8.0, 8.0, 2)
