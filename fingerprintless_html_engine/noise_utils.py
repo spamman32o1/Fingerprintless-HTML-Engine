@@ -254,7 +254,7 @@ def noise_divs(
         def pseudo_rule(pseudo: str) -> str:
             if not assigned_class:
                 return ""
-            pseudo_styles = ["content:''", "position:absolute", "inset:0"]
+            pseudo_styles = ["content:''", "position:absolute", "inset:0", "z-index:-1"]
             if maybe(rng, 0.65):
                 pseudo_styles.append(f"opacity:{rfloat(rng, 0.08, 0.4, 2)}")
             if maybe(rng, 0.50):
@@ -277,6 +277,15 @@ def noise_divs(
             if rule:
                 pseudo_blocks.append(rule)
         if pseudo_blocks:
+            def has_style(prefix: str) -> bool:
+                return any(style.startswith(prefix) for style in styles)
+
+            if not has_style("position:"):
+                styles.append("position:relative")
+            if not has_style("overflow:"):
+                styles.append("overflow:hidden")
+            if not has_style("z-index:"):
+                styles.append("z-index:0")
             extra_style_blocks.append("<style>" + "".join(pseudo_blocks) + "</style>")
 
         if allow_animations and maybe(rng, 0.28):
