@@ -617,7 +617,17 @@ PROPERTY_NOISE_CANDIDATES = [
             lambda rng: f"https://assets.{_random_domain(rng)}/cover-{rint(rng, 10, 99)}.jpg",
         ],
     ),
-    ("og:image:alt", ["Document shell preview", "Layout preview", "Content card"]),
+    (
+        "og:image:alt",
+        [
+            "Document shell preview",
+            "Layout preview",
+            "Content card",
+            lambda rng: f"{pick(rng, ['Document', 'Layout', 'Content'])} preview {uuid.uuid4().hex[:4]}",
+            lambda rng: f"{pick(rng, ['Shell', 'Frame', 'Panel'])} card {rint(rng, 1, 20)}",
+            lambda rng: f"{pick(rng, ['Reader', 'Viewer', 'Wrapper'])} snapshot {uuid.uuid4().hex[:3]}",
+        ],
+    ),
     ("og:determiner", ["the", "a", "an"]),
     ("article:published_time", [lambda rng: _random_date_string(rng)]),
     ("article:modified_time", [lambda rng: _random_date_string(rng)]),
