@@ -3,13 +3,20 @@ from __future__ import annotations
 import html
 import random
 import re
+import string
 from typing import List, Tuple
 
 from .constants import ENTITY_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
 from .css_utils import InlineStyleRules, letter_style
 from .models import Opt
 from .random_utils import maybe, pick, rint
-from .tag_utils import apply_inline_styles, normalize_table_cellspacing, reorder_tag_attributes
+from .tag_utils import (
+    _parse_tag_attrs,
+    _update_attr_value,
+    apply_inline_styles,
+    normalize_table_cellspacing,
+    reorder_tag_attributes,
+)
 
 
 def parse_synonym_lines(lines: List[str]) -> List[List[str]]:
@@ -263,6 +270,17 @@ def span_wrap_html(
                     if additions:
                         styled_tag = apply_inline_styles(normalized_tag, additions)
 
+            if m and name == "img" and not is_close:
+                attr_match = re.match(r"^<\s*[a-zA-Z0-9:_-]+([^>]*)>$", styled_tag)
+                if attr_match:
+                    rest = attr_match.group(1)
+                    rest = rest.rstrip().rstrip("/")
+                    attrs = _parse_tag_attrs(rest.strip())
+                    if attrs or not rest.strip():
+                        if any(attr_name.lower() == "alt" for attr_name, _, _ in attrs):
+                            # Alt text is intentionally randomized to reduce fingerprinting surface.
+                            styled_tag = _update_attr_value(styled_tag, "alt", _random_alt_text(rng))
+
             if m and name == "tbody" and not is_self_close:
                 if not is_close:
                     table_body_stack.append(0)
@@ -341,3 +359,9 @@ def span_wrap_html(
                 )
 
     return "".join(out)
+
+
+def _random_alt_text(rng: random.Random) -> str:
+    length = rint(rng, 6, 14)
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(rng.choice(alphabet) for _ in range(length))

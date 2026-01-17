@@ -86,6 +86,40 @@ def _parse_tag_attrs(attr_text: str) -> list[tuple[str, str, str | None]]:
     return attrs
 
 
+def _update_attr_value(tag: str, attr_name: str, new_value: str) -> str:
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    updated_attrs: list[str] = []
+    updated = False
+    for parsed_name, raw, value in attrs:
+        if parsed_name.lower() == attr_name.lower():
+            updated_attrs.append(f'{parsed_name}="{new_value}"')
+            updated = True
+        else:
+            updated_attrs.append(raw)
+
+    if not updated:
+        return tag
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
+
+
 def apply_inline_styles(tag: str, additions: list[tuple[str, str]]) -> str:
     if not additions:
         return tag
