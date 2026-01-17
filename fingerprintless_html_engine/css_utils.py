@@ -780,6 +780,19 @@ def random_css(
         extra_rules.append("cite,em{" + cite_style_text + "}")
         cite_inline = _rules_to_inline(cite_style_text)
 
+    extra_rules.append(
+        "@media (min-width: 600px){"
+        ".content{display:flex;flex-wrap:wrap;}"
+        ".box{width:50%;}"
+        "}"
+    )
+    extra_rules.append(
+        "@media (max-width: 599px){"
+        ".content{display:block;}"
+        ".box{width:100%;}"
+        "}"
+    )
+
     inline_styles = InlineStyleRules(
         headings=heading_inline,
         blockquote=quote_inline,

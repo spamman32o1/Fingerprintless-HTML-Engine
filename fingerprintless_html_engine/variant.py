@@ -10,7 +10,7 @@ from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
 from .noise_utils import ie_noise_block, meta_noise, noise_divs
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
-from .structure_utils import randomize_structure
+from .structure_utils import randomize_structure, wrap_content_boxes
 from .tag_utils import normalize_input_html, replace_cellspacing_with_css
 from .text_utils import span_wrap_html
 
@@ -201,8 +201,9 @@ def build_layout_template(
         before_inner = before
         after_body = after
 
+    inner_html = wrap_content_boxes(inner) if not jp_mode else inner
     content_inner = (
-        f"{open_wrap}{before_inner}<div{content_class_attr}>{inner}</div>{after_inner}{close_wrap}"
+        f"{open_wrap}{before_inner}<div{content_class_attr}>{inner_html}</div>{after_inner}{close_wrap}"
     )
 
     def build_wrapper(content_html: str) -> str:

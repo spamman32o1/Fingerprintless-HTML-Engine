@@ -8,6 +8,10 @@ from .models import _HtmlNode
 from .random_utils import maybe, pick
 
 
+CONTENT_CLASS_RE = re.compile(r'class=[\'"][^\'"]*\bcontent\b', re.IGNORECASE)
+BOX_CLASS_RE = re.compile(r'class=[\'"][^\'"]*\bbox\b', re.IGNORECASE)
+
+
 def _tag_name(tag_text: str) -> str | None:
     m = re.match(r"^</?\s*([a-zA-Z0-9:_-]+)", tag_text)
     if not m:
@@ -183,3 +187,26 @@ def randomize_structure(rng: random.Random, content_html: str, enabled: bool) ->
     root = _parse_html_nodes(content_html)
     _mutate_safe_structure(rng, root)
     return "".join(child.render() for child in root.children)
+
+
+def wrap_content_boxes(content_html: str) -> str:
+    if CONTENT_CLASS_RE.search(content_html) or BOX_CLASS_RE.search(content_html):
+        return content_html
+
+    root = _parse_html_nodes(content_html)
+    if not root.children:
+        return '<div class="content"><div class="box"></div></div>'
+
+    midpoint = len(root.children) // 2
+    if midpoint == 0:
+        rendered = "".join(child.render() for child in root.children)
+        return f'<div class="content"><div class="box">{rendered}</div></div>'
+
+    first = "".join(child.render() for child in root.children[:midpoint])
+    second = "".join(child.render() for child in root.children[midpoint:])
+    return (
+        '<div class="content">'
+        f'<div class="box">{first}</div>'
+        f'<div class="box">{second}</div>'
+        "</div>"
+    )
