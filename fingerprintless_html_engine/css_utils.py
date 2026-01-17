@@ -618,6 +618,8 @@ def random_css(
     link_style_text = "".join(rule for rule in link_rules if rule)
     extra_rules.append("a{" + link_style_text + "}")
     extra_rules.append("a:hover{" + "".join(hover_rules) + "}")
+    extra_rules.append("a:focus{" + "".join(hover_rules) + "}")
+    extra_rules.append("a:focus-visible{" + "".join(hover_rules) + "}")
     extra_rules.append("a:active{" + "".join(active_rules) + "}")
 
     list_styles = [
@@ -736,6 +738,16 @@ def random_css(
         )
     extra_rules.append(
         "button:hover,input[type=button]:hover,input[type=submit]:hover,input[type=reset]:hover{"
+        + "".join(button_hover)
+        + "}"
+    )
+    extra_rules.append(
+        "button:focus,input[type=button]:focus,input[type=submit]:focus,input[type=reset]:focus{"
+        + "".join(button_hover)
+        + "}"
+    )
+    extra_rules.append(
+        "button:focus-visible,input[type=button]:focus-visible,input[type=submit]:focus-visible,input[type=reset]:focus-visible{"
         + "".join(button_hover)
         + "}"
     )
