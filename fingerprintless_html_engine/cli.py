@@ -45,14 +45,6 @@ def main() -> None:
         help="Random +/- jitter applied to max nesting per variant (default: 0).",
     )
     parser.add_argument(
-        "--output-mode",
-        "--mode",
-        dest="output_mode",
-        choices=["default", "jp"],
-        default="default",
-        help="Rendering mode for output HTML (default: default, options: default, jp).",
-    )
-    parser.add_argument(
         "--no-dark-mode",
         action="store_false",
         dest="allow_dark_mode",
@@ -93,13 +85,19 @@ def main() -> None:
     if base_max_nesting is None:
         base_max_nesting = Opt(count=count).max_nesting
 
+    strict_mode = _prompt_yes_no(
+        "Enable strict mode (inline styles, no style blocks)? y/n (default n): ",
+        default=False,
+    )
+    output_mode = "strict" if strict_mode else "default"
+
     opt = Opt(
         count=count,
         ie_condition_randomize=args.ie_condition_randomize,
         structure_randomize=args.structure_randomize,
         max_nesting=base_max_nesting,
         max_nesting_jitter=max(0, args.max_nesting_jitter),
-        output_mode=args.output_mode,
+        output_mode=output_mode,
         allow_dark_mode=args.allow_dark_mode,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

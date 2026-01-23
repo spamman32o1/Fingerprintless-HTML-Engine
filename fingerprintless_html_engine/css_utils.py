@@ -123,7 +123,7 @@ def random_css(
     *,
     allow_dark_mode: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
-    jp_mode = output_mode == "jp"
+    strict_mode = output_mode == "strict"
     base_pool = pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
     heading_font = None
@@ -161,7 +161,7 @@ def random_css(
         if maybe(rng, 0.12)
         else rfloat(rng, 13.2, 17.4, 2)
     )
-    if output_mode in {"default", "jp"}:
+    if output_mode in {"default", "strict"}:
         line_height = rfloat(rng, 1.10, 1.50, 3)
     else:
         line_height = (
@@ -399,17 +399,17 @@ def random_css(
         )
 
     layout_modes = ["block", "flow-root"]
-    if not jp_mode:
+    if not strict_mode:
         layout_modes.extend(["flex", "grid"])
     layout_mode = pick(rng, layout_modes)
     gap = rfloat(rng, 6.0, 14.0, 2)
     if layout_mode == "flex":
         flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
-        if maybe(rng, 0.24) and not jp_mode:
+        if maybe(rng, 0.24) and not strict_mode:
             flex_props.append(
                 f"align-items:{pick(rng, ['stretch', 'flex-start', 'center'])};"
             )
-        if maybe(rng, 0.22) and not jp_mode:
+        if maybe(rng, 0.22) and not strict_mode:
             flex_props.append(
                 f"justify-content:{pick(rng, ['flex-start', 'space-between', 'center'])};"
             )
@@ -421,11 +421,11 @@ def random_css(
             grid_props.append(
                 f"grid-template-columns: repeat({columns}, minmax(0, 1fr));"
             )
-        if maybe(rng, 0.30) and not jp_mode:
+        if maybe(rng, 0.30) and not strict_mode:
             grid_props.append(
                 f"justify-items:{pick(rng, ['start', 'stretch', 'center'])};"
             )
-        if maybe(rng, 0.22) and not jp_mode:
+        if maybe(rng, 0.22) and not strict_mode:
             grid_props.append(
                 f"align-items:{pick(rng, ['start', 'stretch', 'center'])};"
             )
@@ -461,7 +461,7 @@ def random_css(
         margin_pattern = f"{margin_top}px {margin_side}px {margin_bottom}px"
 
     wrapper_rules = []
-    if not jp_mode:
+    if not strict_mode:
         wrapper_rules.append(f"max-width: {max_w}px;")
     wrapper_rules.extend(
         [
@@ -473,7 +473,7 @@ def random_css(
             f"margin: {margin_pattern};",
         ]
     )
-    if not jp_mode:
+    if not strict_mode:
         wrapper_rules.append(f"border-radius: {border_rad}px;")
     wrapper_rules.extend([f"border: {border};", f"box-shadow: {shadow};", extra])
     if text_align:
@@ -716,7 +716,7 @@ def random_css(
         + button_style_text
         + "}"
     )
-    if not jp_mode:
+    if not strict_mode:
         button_radius = rfloat(rng, 6.0, 12.0, 2)
         button_style_text = button_style_text.replace(
             "border:",
@@ -775,7 +775,7 @@ def random_css(
         "padding:0 2px;"
     )
     mark_rule = "mark{" + mark_style_text
-    if not jp_mode:
+    if not strict_mode:
         mark_rule += "border-radius:3px;"
     mark_rule += "}"
     extra_rules.append(mark_rule)
