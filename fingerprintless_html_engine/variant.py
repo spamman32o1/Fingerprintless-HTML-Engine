@@ -78,11 +78,16 @@ def build_variant(
     )
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
-    ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
-    ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
-
-    before = ie_before + noise_divs(rng, opt.noise_divs_max)
-    after = noise_divs(rng, opt.noise_divs_max) + ie_after
+    if opt.output_mode != "jp":
+        ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
+        ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
+        before = ie_before + noise_divs(rng, opt.noise_divs_max)
+        after = noise_divs(rng, opt.noise_divs_max) + ie_after
+    else:
+        ie_before = ""
+        ie_after = ""
+        before = ""
+        after = ""
 
     depth = rint(rng, 1, max(1, opt.max_nesting))
     open_wrap = ""
@@ -157,7 +162,7 @@ def build_layout_template(
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
         "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
-        f"{meta_noise(rng)}"
+        f"{meta_noise(rng) if not jp_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
         f"{jsonld_scripts}"
