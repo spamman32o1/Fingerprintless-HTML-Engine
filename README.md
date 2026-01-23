@@ -38,7 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- `--output-mode` / `--mode`: Choose `default` or `jp` output mode (default: `default`).
+- Strict mode prompt: You will be asked whether to enable strict mode after selecting the variant count.
 
 ### 📂 Multiple Inputs
 If you supply multiple input files, the engine will prompt to place outputs in a shared
@@ -46,31 +46,33 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 
 ### 🧪 Example
 ```bash
-./script.py --max-nesting 6 --max-nesting-jitter 2 --output-mode default
+./script.py --max-nesting 6 --max-nesting-jitter 2
 ```
 ```text
 Enter HTML file path: samples/page.html
 How many variants? 5
+Enable strict mode (inline styles, no style blocks)? y/n (default n):
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
 ```
 
-## 🇯🇵 JP Output Mode (Docomo-Friendly)
-Use `--output-mode jp` to generate variants optimized for stricter Japanese mobile clients
-where CSS support is limited (e.g., Docomo). Compared to the default Gmail-friendly output:
+## ✅ Strict Mode (Docomo-Friendly)
+Enable strict mode when prompted (`y`) to generate variants optimized for stricter Japanese
+mobile clients where CSS support is limited (e.g., Docomo). Compared to the default
+Gmail-friendly output, strict mode disables or avoids:
 
-- **No `<style>` block**: essential styles are moved inline on wrapper/container elements.
-- **No `@media` usage**: responsive media queries are omitted.
-- **No `max-width` or `border-radius`**: avoids unsupported layout and rounding rules.
-- **Reduced class-based styling**: fewer class selectors, inline styles preferred.
-- **Tables still allowed**: table-based layouts remain intact for email compatibility.
-
-Example:
-```bash
-./script.py --output-mode jp
-```
+- **`<style>` blocks**: all styling moves inline on `body`, wrapper, and content elements.
+- **`@media` rules**: responsive media queries are skipped (no stylesheet means no media queries).
+- **Class-based styling**: wrapper/content classes and class selectors are not used.
+- **Flex/grid layouts**: strict mode sticks to block/flow-root layout patterns only.
+- **`max-width` and rounded corners**: avoids `max-width` and `border-radius` in wrapper and button styles.
+- **Span-based text wrapping**: inline text span jittering is disabled (plain text kept).
+- **Noise divs + IE comments**: HTML noise wrappers and IE conditional comment noise are removed.
+- **Meta noise**: randomized meta tag injection is skipped in the `<head>`.
+- **Content box wrappers**: extra wrapper boxes around content sections are skipped.
+- **Table/list normalization only**: table/list attributes are normalized with inline styles for compatibility.
 
 ## 🧾 Metanoise
-Every generated variant automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:
+Every generated variant (except strict mode) automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:
 
 - Picks a mix of `name`, `property`, and `http-equiv` tags from diverse categories (SEO, social, caching, mobile, privacy) to keep headers varied.
 - Randomizes attribute casing, whitespace, separators, and occasionally prefixes values with unique identifiers for organic entropy.

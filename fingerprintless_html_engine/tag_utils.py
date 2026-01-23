@@ -233,7 +233,7 @@ def _normalize_center_tag(tag: str) -> str:
     return f"<div{slash}>"
 
 
-def _normalize_table_td_attrs(tag: str, *, jp_mode: bool = False) -> str:
+def _normalize_table_td_attrs(tag: str, *, strict_mode: bool = False) -> str:
     if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
         return tag
 
@@ -245,7 +245,7 @@ def _normalize_table_td_attrs(tag: str, *, jp_mode: bool = False) -> str:
     tag_name = name.lower()
     if tag_name not in {"table", "td", "th"}:
         return tag
-    if not rest.strip() and not jp_mode:
+    if not rest.strip() and not strict_mode:
         return tag
 
     trailing_slash = rest.rstrip().endswith("/")
@@ -305,7 +305,7 @@ def _normalize_table_td_attrs(tag: str, *, jp_mode: bool = False) -> str:
         else:
             additions.append(("text-align", align_value))
 
-    if jp_mode:
+    if strict_mode:
         if tag_name == "table":
             additions.append(("width", "100%"))
             additions.append(("border-collapse", "collapse"))
@@ -326,8 +326,8 @@ def _normalize_table_td_attrs(tag: str, *, jp_mode: bool = False) -> str:
     return f"<{name}{slash}>"
 
 
-def _normalize_list_attrs(tag: str, *, jp_mode: bool = False) -> str:
-    if not jp_mode:
+def _normalize_list_attrs(tag: str, *, strict_mode: bool = False) -> str:
+    if not strict_mode:
         return tag
     if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
         return tag
@@ -462,7 +462,7 @@ def normalize_table_cellspacing(tag: str) -> str:
     return f"<{name}{slash}>"
 
 
-def normalize_input_html(html_in: str, *, jp_mode: bool = False) -> str:
+def normalize_input_html(html_in: str, *, strict_mode: bool = False) -> str:
     from .constants import TAG_SPLIT_RE
 
     parts = TAG_SPLIT_RE.split(html_in)
@@ -473,8 +473,8 @@ def normalize_input_html(html_in: str, *, jp_mode: bool = False) -> str:
             continue
         if part.startswith("<") and part.endswith(">"):
             normalized = _normalize_center_tag(part)
-            normalized = _normalize_table_td_attrs(normalized, jp_mode=jp_mode)
-            normalized = _normalize_list_attrs(normalized, jp_mode=jp_mode)
+            normalized = _normalize_table_td_attrs(normalized, strict_mode=strict_mode)
+            normalized = _normalize_list_attrs(normalized, strict_mode=strict_mode)
             out.append(normalized)
         else:
             out.append(part)

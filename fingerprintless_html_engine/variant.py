@@ -59,7 +59,7 @@ def build_variant(
     if synonym_patterns is None:
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
-    content_html = normalize_input_html(content_html, jp_mode=opt.output_mode == "jp")
+    content_html = normalize_input_html(content_html, strict_mode=opt.output_mode == "strict")
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
         rng,
@@ -74,12 +74,12 @@ def build_variant(
         structured_html,
         opt,
         synonym_patterns,
-        inline_styles=inline_styles if opt.output_mode == "jp" else None,
-        wrap_spans=opt.output_mode != "jp",
+        inline_styles=inline_styles if opt.output_mode == "strict" else None,
+        wrap_spans=opt.output_mode != "strict",
     )
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
-    if opt.output_mode != "jp":
+    if opt.output_mode != "strict":
         ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
         ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
         before = ie_before + noise_divs(rng, opt.noise_divs_max)
@@ -142,14 +142,14 @@ def build_layout_template(
     extra_css: str,
     output_mode: str,
 ) -> str:
-    jp_mode = output_mode == "jp"
-    body_style_attr = f' style="{body_css}"' if jp_mode else ""
-    wrapper_style_attr = f' style="{wrapper_css}"' if jp_mode else ""
-    wrapper_class_attr = f' class="{wrapper_class}"' if not jp_mode else ""
-    content_class_attr = f' class="{content_class}"' if not jp_mode else ""
+    strict_mode = output_mode == "strict"
+    body_style_attr = f' style="{body_css}"' if strict_mode else ""
+    wrapper_style_attr = f' style="{wrapper_css}"' if strict_mode else ""
+    wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
+    content_class_attr = f' class="{content_class}"' if not strict_mode else ""
     style_block = (
         ""
-        if jp_mode
+        if strict_mode
         else "<style>"
         f"body{{{body_css}}}"
         f".{wrapper_class}{{{wrapper_css}}}"
@@ -163,21 +163,21 @@ def build_layout_template(
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
         "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
-        f"{meta_noise(rng) if not jp_mode else ''}"
+        f"{meta_noise(rng) if not strict_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
         f"{jsonld_scripts}"
         "</head>"
     )
 
-    outer_table_class = '' if jp_mode else ' class="layout-table"'
+    outer_table_class = '' if strict_mode else ' class="layout-table"'
     outer_table_open = (
         f'<table role="presentation"{outer_table_class} '
         "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
         "<tr><td>"
     )
     outer_table_close = "</td></tr></table>"
-    inner_table_class = '' if jp_mode else ' class="inner-table"'
+    inner_table_class = '' if strict_mode else ' class="inner-table"'
     inner_table_open = (
         f'<table role="presentation"{inner_table_class} '
         "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
@@ -209,7 +209,7 @@ def build_layout_template(
         before_inner = before
         after_body = after
 
-    inner_html = wrap_content_boxes(inner) if not jp_mode else inner
+    inner_html = wrap_content_boxes(inner) if not strict_mode else inner
     content_inner = (
         f"{open_wrap}{before_inner}<div{content_class_attr}>{inner_html}</div>{after_inner}{close_wrap}"
     )
