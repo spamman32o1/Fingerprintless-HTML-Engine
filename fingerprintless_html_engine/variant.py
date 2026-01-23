@@ -164,14 +164,16 @@ def build_layout_template(
         "</head>"
     )
 
+    outer_table_class = '' if jp_mode else ' class="layout-table"'
     outer_table_open = (
-        '<table role="presentation" class="layout-table" '
+        f'<table role="presentation"{outer_table_class} '
         "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
         "<tr><td>"
     )
     outer_table_close = "</td></tr></table>"
+    inner_table_class = '' if jp_mode else ' class="inner-table"'
     inner_table_open = (
-        '<table role="presentation" class="inner-table" '
+        f'<table role="presentation"{inner_table_class} '
         "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
         "<tr><td>"
     )
