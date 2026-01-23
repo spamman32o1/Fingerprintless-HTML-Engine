@@ -75,6 +75,7 @@ def build_variant(
         opt,
         synonym_patterns,
         inline_styles=inline_styles if opt.output_mode == "jp" else None,
+        wrap_spans=opt.output_mode != "jp",
     )
     jsonld_scripts = build_fake_jsonld_scripts(rng)
 
