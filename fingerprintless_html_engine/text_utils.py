@@ -186,6 +186,7 @@ def span_wrap_html(
     synonym_patterns: List[Tuple[re.Pattern, List[str]]] | None = None,
     *,
     inline_styles: InlineStyleRules | None = None,
+    wrap_spans: bool = True,
 ) -> str:
     if synonym_patterns is None:
         synonym_patterns = []
@@ -326,14 +327,17 @@ def span_wrap_html(
                         continue
                     normalized = normalize_text_whitespace(segment)
                     with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
-                    out.append(
-                        wrap_text_node_chunked(
-                            rng,
-                            with_synonyms,
-                            opt,
-                            in_table_list=in_table_list,
+                    if wrap_spans:
+                        out.append(
+                            wrap_text_node_chunked(
+                                rng,
+                                with_synonyms,
+                                opt,
+                                in_table_list=in_table_list,
+                            )
                         )
-                    )
+                    else:
+                        out.append(with_synonyms)
             else:
                 out.append(part)
         else:
@@ -349,14 +353,17 @@ def span_wrap_html(
                     out.append(normalized)
                     continue
                 with_synonyms = apply_synonyms(normalized, rng, synonym_patterns)
-                out.append(
-                    wrap_text_node_chunked(
-                        rng,
-                        with_synonyms,
-                        opt,
-                        in_table_list=in_table_list,
+                if wrap_spans:
+                    out.append(
+                        wrap_text_node_chunked(
+                            rng,
+                            with_synonyms,
+                            opt,
+                            in_table_list=in_table_list,
+                        )
                     )
-                )
+                else:
+                    out.append(with_synonyms)
 
     return "".join(out)
 
