@@ -246,10 +246,29 @@ def _encode_quoted_printable_html(
 
     def _add_segment(segment: str) -> None:
         nonlocal line_len
-        if line_len + len(segment) > soft_break_limit and line:
-            _flush_line(add_soft_break=True)
-        line.append(segment)
-        line_len += len(segment)
+        segment_units: list[str] = []
+        idx = 0
+        while idx < len(segment):
+            if (
+                segment[idx] == "="
+                and idx + 2 < len(segment)
+                and all(char in "0123456789ABCDEF" for char in segment[idx + 1 : idx + 3])
+            ):
+                segment_units.append(segment[idx : idx + 3])
+                idx += 3
+            else:
+                segment_units.append(segment[idx])
+                idx += 1
+
+        for unit in segment_units:
+            remaining = soft_break_limit - line_len
+            if remaining == 0 and line:
+                _flush_line(add_soft_break=True)
+                remaining = soft_break_limit
+            if len(unit) > remaining and line:
+                _flush_line(add_soft_break=True)
+            line.append(unit)
+            line_len += len(unit)
 
     for token in _split_html_tokens(html_text):
         if token == "\n":
