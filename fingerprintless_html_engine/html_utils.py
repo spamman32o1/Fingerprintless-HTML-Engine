@@ -251,12 +251,25 @@ def _encode_quoted_printable_html(
         line.append(segment)
         line_len += len(segment)
 
+    def _iter_encoded_segments(token: str) -> list[str]:
+        token_bytes = token.encode(encoding)
+        segments: list[str] = []
+        for byte in token_bytes:
+            if byte in (9, 32):
+                segment = chr(byte)
+            elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
+                segment = chr(byte)
+            else:
+                segment = f"={byte:02X}"
+            segments.append(segment)
+        return segments
+
     for token in _split_html_tokens(html_text):
         if token == "\n":
             _flush_line(add_soft_break=False)
             continue
-        segment = _encode_qp_token(token, encoding=encoding, encode_equals=encode_equals)
-        _add_segment(segment)
+        for segment in _iter_encoded_segments(token):
+            _add_segment(segment)
 
     _flush_line(add_soft_break=False)
     return "\r\n".join(lines)
