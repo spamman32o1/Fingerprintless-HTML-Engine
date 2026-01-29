@@ -38,7 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses strict + super strict rendering rules, quoted-printable encoding, and writes `.eml` files with the proper MIME headers for HTML email clients).
+- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses strict + super strict rendering rules and quoted-printable encoding in `.html` files).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 
 ### 📂 Multiple Inputs
@@ -52,7 +52,7 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 ```text
 Enter HTML file path: samples/page.html
 How many variants? 5
-Enable Libero mode for libero.it (writes .eml with quoted-printable + super strict)? y/n (default n):
+Enable Libero mode for libero.it (writes quoted-printable super strict HTML)? y/n (default n):
 Enable strict mode (inline styles, no style blocks)? y/n (default n):
 Enable super strict mode for aggressive providers? y/n (default n):
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
@@ -85,13 +85,9 @@ mode builds on strict mode by further minimizing styling and layout variability:
 - **Reduced CSS complexity**: avoids gradients, background images, and opacity tweaks.
 
 ### 📬 Libero Mode Output Notes
-When Libero mode is enabled, the engine emits `.eml` files instead of `.html`. Each file includes:
-
-- `Content-Transfer-Encoding: quoted-printable`
-- `Content-Type: text/html; charset=utf-8`
-
-This makes the output ready to import or send through HTML email clients such as libero.it without
-extra wrapping steps.
+When Libero mode is enabled, the engine emits quoted-printable encoded `.html` files instead of
+wrapping the content as `.eml`. This keeps the output as HTML while still applying the strict
+encoding expected by providers like libero.it.
 
 ## 🧾 Metanoise
 Every generated variant (except strict mode) automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:
