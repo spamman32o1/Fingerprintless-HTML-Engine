@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import quopri
 import re
+from email import quoprimime
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
 from .tag_utils import normalize_input_html
@@ -153,8 +153,10 @@ def minify_output_html(html_text: str) -> str:
 def encode_quoted_printable_html(html_text: str, *, encoding: str = "utf-8") -> str:
     """Encode HTML as quoted-printable text with CRLF line endings and headers."""
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
-    encoded = quopri.encodestring(normalized.encode(encoding), quotetabs=False)
-    body = encoded.replace(b"\n", b"\r\n").decode("ascii")
+    body_bytes = normalized.encode(encoding)
+    body_text = body_bytes.decode("latin1")
+    encoded = quoprimime.body_encode(body_text, maxlinelen=76, eol="\n")
+    body = encoded.replace("\n", "\r\n")
     headers = (
         "Content-Type: text/html; charset=UTF-8\r\n"
         "Content-Transfer-Encoding: quoted-printable\r\n"
