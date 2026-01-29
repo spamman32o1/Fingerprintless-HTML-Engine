@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import quopri
 import re
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
@@ -147,3 +148,10 @@ def minify_output_html(html_text: str) -> str:
     minified = "".join(out)
     minified = _collapse_intertag_whitespace(minified)
     return minified.strip()
+
+
+def encode_quoted_printable_html(html_text: str, *, encoding: str = "utf-8") -> str:
+    """Encode HTML as quoted-printable text with CRLF line endings."""
+    normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
+    encoded = quopri.encodestring(normalized.encode(encoding), quotetabs=True)
+    return encoded.replace(b"\n", b"\r\n").decode("ascii")

@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from .html_utils import extract_body_content, extract_lang, sanitize_input_html
+from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
 from .text_utils import build_synonym_patterns, parse_synonym_lines
@@ -166,6 +166,8 @@ def main() -> None:
         for i in range(1, opt.count + 1):
             variant_title = random_title()
             variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
+            if opt.output_mode == "libero":
+                variant = encode_quoted_printable_html(variant)
             (outdir / f"{filename_prefix}variant_{i:03d}.html").write_text(variant, encoding="utf-8")
 
         output_locations.append(outdir.resolve())

@@ -11,6 +11,12 @@ from .constants import (
     TABLE_TAG_RE,
 )
 
+STRICT_OUTPUT_MODES = {"strict", "super_strict"}
+
+
+def is_strict_output_mode(output_mode: str) -> bool:
+    return output_mode in STRICT_OUTPUT_MODES
+
 
 def _parse_attr_value(value_text: str | None) -> str | None:
     if not value_text:
