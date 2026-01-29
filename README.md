@@ -38,7 +38,8 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- Strict mode prompt: You will be asked whether to enable strict mode (and optionally super strict mode) after selecting the variant count.
+- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count.
+- Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 
 ### 📂 Multiple Inputs
 If you supply multiple input files, the engine will prompt to place outputs in a shared
@@ -51,6 +52,7 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 ```text
 Enter HTML file path: samples/page.html
 How many variants? 5
+Enable Libero mode for libero.it (quoted-printable + super strict)? y/n (default n):
 Enable strict mode (inline styles, no style blocks)? y/n (default n):
 Enable super strict mode for aggressive providers? y/n (default n):
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
