@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from email import quoprimime
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
 from .tag_utils import normalize_input_html
@@ -150,13 +149,65 @@ def minify_output_html(html_text: str) -> str:
     return minified.strip()
 
 
-def encode_quoted_printable_html(html_text: str, *, encoding: str = "utf-8") -> str:
+def _encode_quoted_printable_bytes(
+    body_bytes: bytes,
+    *,
+    maxlinelen: int = 76,
+    encode_equals: bool = True,
+) -> str:
+    lines: list[str] = []
+    line: list[str] = []
+    line_len = 0
+    soft_break_limit = maxlinelen - 1
+
+    def _flush_line(add_soft_break: bool = False) -> None:
+        nonlocal line, line_len
+        if add_soft_break:
+            lines.append("".join(line) + "=")
+        else:
+            lines.append("".join(line))
+        line = []
+        line_len = 0
+
+    def _add_segment(segment: str) -> None:
+        nonlocal line_len
+        if line_len + len(segment) > soft_break_limit:
+            _flush_line(add_soft_break=True)
+        line.append(segment)
+        line_len += len(segment)
+
+    for idx, byte in enumerate(body_bytes):
+        if byte == 13:
+            continue
+        if byte == 10:
+            _flush_line(add_soft_break=False)
+            continue
+        next_is_newline = idx + 1 < len(body_bytes) and body_bytes[idx + 1] == 10
+        at_end = idx + 1 == len(body_bytes)
+        if byte in (9, 32) and (next_is_newline or at_end):
+            segment = f"={byte:02X}"
+        elif byte in (9, 32):
+            segment = chr(byte)
+        elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
+            segment = chr(byte)
+        else:
+            segment = f"={byte:02X}"
+        _add_segment(segment)
+
+    _flush_line(add_soft_break=False)
+    return "\r\n".join(lines)
+
+
+def encode_quoted_printable_html(
+    html_text: str,
+    *,
+    encoding: str = "utf-8",
+    encode_equals: bool = True,
+) -> str:
     """Encode HTML as quoted-printable text with CRLF line endings and headers."""
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
     body_bytes = normalized.encode(encoding)
-    body_text = body_bytes.decode("latin1")
-    encoded = quoprimime.body_encode(body_text, maxlinelen=76, eol="\n")
-    body = encoded.replace("\n", "\r\n")
+    body = _encode_quoted_printable_bytes(body_bytes, maxlinelen=76, encode_equals=encode_equals)
     headers = (
         "Content-Type: text/html; charset=UTF-8\r\n"
         "Content-Transfer-Encoding: quoted-printable\r\n"
