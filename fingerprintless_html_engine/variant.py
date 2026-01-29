@@ -148,8 +148,8 @@ def build_layout_template(
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
-    body_style_attr = f' style="{body_css}"' if strict_mode else ""
-    wrapper_style_attr = f' style="{wrapper_css}"' if strict_mode else ""
+    body_style_attr = f' style="{html.escape(body_css, quote=True)}"' if strict_mode else ""
+    wrapper_style_attr = f' style="{html.escape(wrapper_css, quote=True)}"' if strict_mode else ""
     wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
     content_class_attr = f' class="{content_class}"' if not strict_mode else ""
     style_block = (

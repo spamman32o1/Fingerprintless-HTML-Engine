@@ -9,15 +9,15 @@ from .tag_utils import is_strict_output_mode
 
 
 FONT_FALLBACKS = {
-    "sans": ["system-ui", "-apple-system", '"Segoe UI"', "Arial", "sans-serif"],
-    "serif": ['ui-serif', '"Times New Roman"', "Times", "serif"],
-    "mono": ["ui-monospace", '"SFMono-Regular"', "Menlo", "monospace"],
-    "cursive": ['"Comic Sans MS"', "cursive"],
+    "sans": ["system-ui", "-apple-system", "'Segoe UI'", "Arial", "sans-serif"],
+    "serif": ["ui-serif", "'Times New Roman'", "Times", "serif"],
+    "mono": ["ui-monospace", "'SFMono-Regular'", "Menlo", "monospace"],
+    "cursive": ["'Comic Sans MS'", "cursive"],
     "cjk": ["system-ui", "sans-serif"],
-    "display": ["system-ui", '"Segoe UI"', "Arial", "sans-serif"],
-    "humanist": ["system-ui", '"Segoe UI"', "Arial", "sans-serif"],
-    "slab": ['ui-serif', '"Times New Roman"', "Times", "serif"],
-    "handwriting": ['"Comic Sans MS"', "cursive"],
+    "display": ["system-ui", "'Segoe UI'", "Arial", "sans-serif"],
+    "humanist": ["system-ui", "'Segoe UI'", "Arial", "sans-serif"],
+    "slab": ["ui-serif", "'Times New Roman'", "Times", "serif"],
+    "handwriting": ["'Comic Sans MS'", "cursive"],
 }
 
 
@@ -84,7 +84,8 @@ def _build_font_stack(rng: random.Random, pool_key: str) -> tuple[str, bool]:
     existing = set(families)
     ordered = families + [fallback for fallback in fallbacks if fallback not in existing]
     variable_used = variable_used or any(family in variable_fonts for family in families)
-    return ", ".join(ordered), variable_used
+    stack = ", ".join(ordered)
+    return stack.replace('"', "'"), variable_used
 
 
 def _font_variation_settings(rng: random.Random) -> str:
@@ -92,11 +93,11 @@ def _font_variation_settings(rng: random.Random) -> str:
     wdth = rng.randint(92, 108)
     slnt = rng.randint(-6, 0)
     return (
-        'font-variation-settings: "wght" '
+        "font-variation-settings: 'wght' "
         f"{wght}, "
-        '"wdth" '
+        "'wdth' "
         f"{wdth}, "
-        '"slnt" '
+        "'slnt' "
         f"{slnt};"
     )
 
@@ -342,7 +343,7 @@ def random_css(
     if maybe(rng, 0.20):
         feature_value = pick(
             rng,
-            ['"kern" 1, "liga" 1', '"liga" 1', '"kern" 1, "onum" 1', '"ss01" 1'],
+            ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
         )
         body_rules.append(f"font-feature-settings:{feature_value};")
     if maybe(rng, 0.20):
@@ -849,7 +850,7 @@ def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
     font_variation = ""
     if maybe(rng, 0.05):
         font_variation = (
-            'font-variation-settings:"wght" '
+            "font-variation-settings:'wght' "
             f"{rng.randint(360, 640)};"
         )
 
