@@ -156,7 +156,7 @@ def main() -> None:
 
     output_locations: list[Path] = []
     def _build_libero_html(html_text: str) -> str:
-        return encode_quoted_printable_html(html_text)
+        return encode_quoted_printable_html(html_text, encode_equals=False)
 
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
