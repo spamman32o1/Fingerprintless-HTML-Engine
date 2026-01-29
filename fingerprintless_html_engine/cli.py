@@ -86,7 +86,7 @@ def main() -> None:
         base_max_nesting = Opt(count=count).max_nesting
 
     libero_mode = _prompt_yes_no(
-        "Enable Libero mode for libero.it (writes .eml with quoted-printable + super strict)? y/n (default n): ",
+        "Enable Libero mode for libero.it (writes quoted-printable super strict HTML)? y/n (default n): ",
         default=False,
     )
     output_mode = "libero" if libero_mode else "default"
@@ -155,13 +155,8 @@ def main() -> None:
             filename_prefixes[input_path] = prefix
 
     output_locations: list[Path] = []
-    def _build_libero_eml(html_text: str) -> str:
-        encoded = encode_quoted_printable_html(html_text)
-        headers = [
-            "Content-Transfer-Encoding: quoted-printable",
-            "Content-Type: text/html; charset=utf-8",
-        ]
-        return "\r\n".join(headers) + "\r\n\r\n" + encoded
+    def _build_libero_html(html_text: str) -> str:
+        return encode_quoted_printable_html(html_text)
 
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
@@ -181,8 +176,8 @@ def main() -> None:
             variant_title = random_title()
             variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
             if opt.output_mode == "libero":
-                variant = _build_libero_eml(variant)
-                output_name = f"{filename_prefix}variant_{i:03d}.eml"
+                variant = _build_libero_html(variant)
+                output_name = f"{filename_prefix}variant_{i:03d}.html"
             else:
                 output_name = f"{filename_prefix}variant_{i:03d}.html"
             (outdir / output_name).write_text(variant, encoding="utf-8")
