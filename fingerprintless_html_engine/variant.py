@@ -59,7 +59,9 @@ def build_variant(
     if synonym_patterns is None:
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
-    content_html = normalize_input_html(content_html, strict_mode=opt.output_mode == "strict")
+    strict_mode = opt.output_mode in {"strict", "super_strict"}
+    super_strict = opt.output_mode == "super_strict"
+    content_html = normalize_input_html(content_html, strict_mode=strict_mode)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
         rng,
@@ -68,18 +70,20 @@ def build_variant(
     )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
-    structured_html = randomize_structure(rng, content_html, opt.structure_randomize)
+    structured_html = (
+        content_html if super_strict else randomize_structure(rng, content_html, opt.structure_randomize)
+    )
     inner = span_wrap_html(
         rng,
         structured_html,
         opt,
         synonym_patterns,
         inline_styles=inline_styles if opt.output_mode == "strict" else None,
-        wrap_spans=opt.output_mode != "strict",
+        wrap_spans=not strict_mode,
     )
-    jsonld_scripts = build_fake_jsonld_scripts(rng)
+    jsonld_scripts = "" if super_strict else build_fake_jsonld_scripts(rng)
 
-    if opt.output_mode != "strict":
+    if not strict_mode:
         ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
         ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
         before = ie_before + noise_divs(rng, opt.noise_divs_max)
@@ -90,7 +94,7 @@ def build_variant(
         before = ""
         after = ""
 
-    depth = rint(rng, 1, max(1, opt.max_nesting))
+    depth = 0 if super_strict else rint(rng, 1, max(1, opt.max_nesting))
     open_wrap = ""
     close_wrap = ""
     for _ in range(depth):
@@ -142,7 +146,8 @@ def build_layout_template(
     extra_css: str,
     output_mode: str,
 ) -> str:
-    strict_mode = output_mode == "strict"
+    strict_mode = output_mode in {"strict", "super_strict"}
+    super_strict = output_mode == "super_strict"
     body_style_attr = f' style="{body_css}"' if strict_mode else ""
     wrapper_style_attr = f' style="{wrapper_css}"' if strict_mode else ""
     wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
@@ -191,7 +196,10 @@ def build_layout_template(
     )
     table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
 
-    placement = pick(rng, ["inner", "body-outside", "mixed-before", "mixed-after"])
+    placement = "inner" if super_strict else pick(
+        rng,
+        ["inner", "body-outside", "mixed-before", "mixed-after"],
+    )
     before_body = ""
     after_body = ""
     before_inner = ""
@@ -217,7 +225,7 @@ def build_layout_template(
     def build_wrapper(content_html: str) -> str:
         wrapper_open = f"<div{wrapper_class_attr}{wrapper_style_attr}>"
         wrapper_close = "</div>"
-        if maybe(rng, 0.45):
+        if not super_strict and maybe(rng, 0.45):
             wrap_tag = pick(rng, ["section", "div"])
             role = ""
             if wrap_tag == "div" and maybe(rng, 0.5):
@@ -226,7 +234,7 @@ def build_layout_template(
             wrapper_close = f"</{wrap_tag}>{wrapper_close}"
         return f"{wrapper_open}{content_html}{wrapper_close}"
 
-    use_outer_layer = maybe(rng, 0.35)
+    use_outer_layer = False if super_strict else maybe(rng, 0.35)
     outer_layer_open = ""
     outer_layer_close = ""
     if use_outer_layer:
@@ -237,15 +245,19 @@ def build_layout_template(
         outer_layer_open = f"<{outer_tag}{role}>"
         outer_layer_close = f"</{outer_tag}>"
 
-    layout_choice = pick(
-        rng,
-        [
-            "outer-table",
-            "outer-table-fallback",
-            "outer-table-inner",
-            "inner-only",
-            "plain",
-        ],
+    layout_choice = (
+        "outer-table-fallback"
+        if super_strict
+        else pick(
+            rng,
+            [
+                "outer-table",
+                "outer-table-fallback",
+                "outer-table-inner",
+                "inner-only",
+                "plain",
+            ],
+        )
     )
     use_outer_table = layout_choice in {"outer-table", "outer-table-fallback", "outer-table-inner"}
     use_inner_table = layout_choice in {"outer-table-inner", "inner-only"}

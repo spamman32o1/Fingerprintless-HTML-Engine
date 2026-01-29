@@ -38,7 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- Strict mode prompt: You will be asked whether to enable strict mode after selecting the variant count.
+- Strict mode prompt: You will be asked whether to enable strict mode (and optionally super strict mode) after selecting the variant count.
 
 ### 📂 Multiple Inputs
 If you supply multiple input files, the engine will prompt to place outputs in a shared
@@ -52,6 +52,7 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 Enter HTML file path: samples/page.html
 How many variants? 5
 Enable strict mode (inline styles, no style blocks)? y/n (default n):
+Enable super strict mode for aggressive providers? y/n (default n):
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
 ```
 
@@ -70,6 +71,16 @@ Gmail-friendly output, strict mode disables or avoids:
 - **Meta noise**: randomized meta tag injection is skipped in the `<head>`.
 - **Content box wrappers**: extra wrapper boxes around content sections are skipped.
 - **Table/list normalization only**: table/list attributes are normalized with inline styles for compatibility.
+
+## 🧱 Super Strict Mode (Aggressive Providers)
+If you answer `y` to the follow-up prompt, the engine will switch to **super strict** mode
+for aggressive providers (e.g., libero.it) that may strip modern CSS or wrappers. Super strict
+mode builds on strict mode by further minimizing styling and layout variability:
+
+- **No noise or JSON-LD decoys**: skips metanoise, JSON-LD scripts, IE comments, and noise divs.
+- **Conservative layout**: always uses the table fallback layout path with minimal wrapper layers.
+- **Minimal span injection**: text span wrapping and extra inline styles are kept to a minimum.
+- **Reduced CSS complexity**: avoids gradients, background images, and opacity tweaks.
 
 ## 🧾 Metanoise
 Every generated variant (except strict mode) automatically receives a **metanoise** block that simulates the messy metadata you see in real-world documents. The engine:

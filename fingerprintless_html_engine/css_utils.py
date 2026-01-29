@@ -123,7 +123,8 @@ def random_css(
     *,
     allow_dark_mode: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
-    strict_mode = output_mode == "strict"
+    strict_mode = output_mode in {"strict", "super_strict"}
+    super_strict = output_mode == "super_strict"
     base_pool = pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
     heading_font = None
@@ -161,7 +162,7 @@ def random_css(
         if maybe(rng, 0.12)
         else rfloat(rng, 13.2, 17.4, 2)
     )
-    if output_mode in {"default", "strict"}:
+    if output_mode in {"default", "strict", "super_strict"}:
         line_height = rfloat(rng, 1.10, 1.50, 3)
     else:
         line_height = (
@@ -200,7 +201,7 @@ def random_css(
         "#161b22",
     ]
 
-    opacity = rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0
+    opacity = 1.0 if super_strict else (rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0)
     text_color = pick(rng, text_palette)
     bg_color = pick(rng, bg_palette)
 
@@ -228,7 +229,7 @@ def random_css(
     ]
     if dark_theme:
         gradient_options = dark_gradients
-    if maybe(rng, 0.38 if dark_theme else 0.30):
+    if not super_strict and maybe(rng, 0.38 if dark_theme else 0.30):
         for _ in range(1 + (1 if maybe(rng, 0.25) else 0)):
             g_type, c1, c2, angle = pick(rng, gradient_options)
             if g_type == "linear":
@@ -275,10 +276,10 @@ def random_css(
             "repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
         ]
 
-    if maybe(rng, 0.22):
+    if not super_strict and maybe(rng, 0.22):
         overlays = rng.sample(pattern_overlays, rng.randint(1, 2))
         body_background_images.extend(overlays)
-    if maybe(rng, 0.18):
+    if not super_strict and maybe(rng, 0.18):
         body_background_images.append(pick(rng, noise_textures))
 
     use_css_vars = maybe(rng, 0.32)
@@ -360,15 +361,15 @@ def random_css(
         )
     )
 
-    if body_background_images:
+    if body_background_images and not super_strict:
         body_rules.append(f"background-image: {', '.join(body_background_images)};")
-    if body_background_images and maybe(rng, 0.28):
+    if body_background_images and not super_strict and maybe(rng, 0.28):
         body_rules.append(f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};")
-    if body_background_images and maybe(rng, 0.22):
+    if body_background_images and not super_strict and maybe(rng, 0.22):
         body_rules.append(
             f"background-position: {pick(rng, ['center', 'top left', 'top right', 'bottom left', 'bottom right'])};"
         )
-    if body_background_images and maybe(rng, 0.18):
+    if body_background_images and not super_strict and maybe(rng, 0.18):
         body_rules.append(
             f"background-attachment: {pick(rng, ['scroll', 'fixed', 'local'])};"
         )

@@ -20,6 +20,7 @@ class Opt:
 
     ie_condition_randomize: bool = True
     structure_randomize: bool = True
+    # "default", "strict", or "super_strict"
     output_mode: str = "default"
     allow_dark_mode: bool = True
 
