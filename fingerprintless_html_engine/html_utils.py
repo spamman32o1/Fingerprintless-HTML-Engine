@@ -149,10 +149,71 @@ def minify_output_html(html_text: str) -> str:
     return minified.strip()
 
 
-def _encode_quoted_printable_bytes(
-    body_bytes: bytes,
+def _split_tag_attributes(tag: str) -> list[str]:
+    tokens: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+
+    for char in tag:
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+
+        if char in ("'", '"'):
+            quote = char
+            current.append(char)
+            continue
+
+        if char.isspace():
+            if current:
+                tokens.append("".join(current))
+                current = []
+            current.append(char)
+            continue
+
+        current.append(char)
+
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
+
+def _split_html_tokens(html_text: str) -> list[str]:
+    parts = TAG_SPLIT_RE.split(html_text)
+    tokens: list[str] = []
+
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("<") and part.endswith(">"):
+            tokens.extend(_split_tag_attributes(part))
+        else:
+            tokens.extend(list(part))
+
+    return tokens
+
+
+def _encode_qp_token(token: str, *, encoding: str, encode_equals: bool) -> str:
+    token_bytes = token.encode(encoding)
+    encoded: list[str] = []
+    for byte in token_bytes:
+        if byte in (9, 32):
+            segment = chr(byte)
+        elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
+            segment = chr(byte)
+        else:
+            segment = f"={byte:02X}"
+        encoded.append(segment)
+    return "".join(encoded)
+
+
+def _encode_quoted_printable_html(
+    html_text: str,
     *,
     maxlinelen: int = 76,
+    encoding: str,
     encode_equals: bool = True,
 ) -> str:
     lines: list[str] = []
@@ -160,8 +221,22 @@ def _encode_quoted_printable_bytes(
     line_len = 0
     soft_break_limit = maxlinelen - 1
 
+    def _encode_trailing_whitespace() -> None:
+        nonlocal line_len
+        if not line:
+            return
+        last = line[-1]
+        match = re.search(r"[ \t]+$", last)
+        if not match:
+            return
+        trailing = match.group(0)
+        encoded = "".join(f"={ord(char):02X}" for char in trailing)
+        line[-1] = last[: -len(trailing)] + encoded
+        line_len += len(encoded) - len(trailing)
+
     def _flush_line(add_soft_break: bool = False) -> None:
         nonlocal line, line_len
+        _encode_trailing_whitespace()
         if add_soft_break:
             lines.append("".join(line) + "=")
         else:
@@ -171,27 +246,16 @@ def _encode_quoted_printable_bytes(
 
     def _add_segment(segment: str) -> None:
         nonlocal line_len
-        if line_len + len(segment) > soft_break_limit:
+        if line_len + len(segment) > soft_break_limit and line:
             _flush_line(add_soft_break=True)
         line.append(segment)
         line_len += len(segment)
 
-    for idx, byte in enumerate(body_bytes):
-        if byte == 13:
-            continue
-        if byte == 10:
+    for token in _split_html_tokens(html_text):
+        if token == "\n":
             _flush_line(add_soft_break=False)
             continue
-        next_is_newline = idx + 1 < len(body_bytes) and body_bytes[idx + 1] == 10
-        at_end = idx + 1 == len(body_bytes)
-        if byte in (9, 32) and (next_is_newline or at_end):
-            segment = f"={byte:02X}"
-        elif byte in (9, 32):
-            segment = chr(byte)
-        elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
-            segment = chr(byte)
-        else:
-            segment = f"={byte:02X}"
+        segment = _encode_qp_token(token, encoding=encoding, encode_equals=encode_equals)
         _add_segment(segment)
 
     _flush_line(add_soft_break=False)
@@ -206,8 +270,12 @@ def encode_quoted_printable_html(
 ) -> str:
     """Encode HTML as quoted-printable text with CRLF line endings and headers."""
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
-    body_bytes = normalized.encode(encoding)
-    body = _encode_quoted_printable_bytes(body_bytes, maxlinelen=76, encode_equals=encode_equals)
+    body = _encode_quoted_printable_html(
+        normalized,
+        maxlinelen=76,
+        encoding=encoding,
+        encode_equals=encode_equals,
+    )
     headers = (
         "Content-Type: text/html; charset=UTF-8\r\n"
         "Content-Transfer-Encoding: quoted-printable\r\n"
