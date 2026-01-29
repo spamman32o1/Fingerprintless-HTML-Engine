@@ -90,6 +90,13 @@ def main() -> None:
         default=False,
     )
     output_mode = "strict" if strict_mode else "default"
+    if strict_mode:
+        super_strict = _prompt_yes_no(
+            "Enable super strict mode for aggressive providers? y/n (default n): ",
+            default=False,
+        )
+        if super_strict:
+            output_mode = "super_strict"
 
     opt = Opt(
         count=count,
