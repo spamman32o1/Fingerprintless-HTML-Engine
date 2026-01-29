@@ -60,7 +60,7 @@ def build_variant(
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
     strict_mode = is_strict_output_mode(opt.output_mode)
-    super_strict = opt.output_mode == "super_strict"
+    super_strict = opt.output_mode in {"super_strict", "libero"}
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
@@ -147,7 +147,7 @@ def build_layout_template(
     output_mode: str,
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
-    super_strict = output_mode == "super_strict"
+    super_strict = output_mode in {"super_strict", "libero"}
     body_style_attr = f' style="{body_css}"' if strict_mode else ""
     wrapper_style_attr = f' style="{wrapper_css}"' if strict_mode else ""
     wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
