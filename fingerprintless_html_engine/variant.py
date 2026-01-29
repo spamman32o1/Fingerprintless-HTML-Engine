@@ -11,7 +11,7 @@ from .models import Opt
 from .noise_utils import ie_noise_block, meta_noise, noise_divs
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
 from .structure_utils import randomize_structure, wrap_content_boxes
-from .tag_utils import normalize_input_html, replace_cellspacing_with_css
+from .tag_utils import is_strict_output_mode, normalize_input_html, replace_cellspacing_with_css
 from .text_utils import span_wrap_html
 
 
@@ -59,7 +59,7 @@ def build_variant(
     if synonym_patterns is None:
         synonym_patterns = []
     opt = randomize_opt_for_variant(rng, opt)
-    strict_mode = opt.output_mode in {"strict", "super_strict"}
+    strict_mode = is_strict_output_mode(opt.output_mode)
     super_strict = opt.output_mode == "super_strict"
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
     content_html = replace_cellspacing_with_css(content_html)
@@ -146,7 +146,7 @@ def build_layout_template(
     extra_css: str,
     output_mode: str,
 ) -> str:
-    strict_mode = output_mode in {"strict", "super_strict"}
+    strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode == "super_strict"
     body_style_attr = f' style="{body_css}"' if strict_mode else ""
     wrapper_style_attr = f' style="{wrapper_css}"' if strict_mode else ""

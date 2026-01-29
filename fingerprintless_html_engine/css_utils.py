@@ -5,6 +5,7 @@ import random
 
 from .constants import BG_COLORS, FONT_FAMILY_POOLS, TEXT_COLORS, VARIABLE_FONT_FAMILIES
 from .random_utils import maybe, pick, rfloat
+from .tag_utils import is_strict_output_mode
 
 
 FONT_FALLBACKS = {
@@ -123,7 +124,7 @@ def random_css(
     *,
     allow_dark_mode: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
-    strict_mode = output_mode in {"strict", "super_strict"}
+    strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode == "super_strict"
     base_pool = pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
@@ -162,7 +163,7 @@ def random_css(
         if maybe(rng, 0.12)
         else rfloat(rng, 13.2, 17.4, 2)
     )
-    if output_mode in {"default", "strict", "super_strict"}:
+    if output_mode in {"default", "strict", "super_strict", "libero"}:
         line_height = rfloat(rng, 1.10, 1.50, 3)
     else:
         line_height = (
