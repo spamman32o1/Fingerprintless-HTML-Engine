@@ -153,5 +153,5 @@ def minify_output_html(html_text: str) -> str:
 def encode_quoted_printable_html(html_text: str, *, encoding: str = "utf-8") -> str:
     """Encode HTML as quoted-printable text with CRLF line endings."""
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
-    encoded = quopri.encodestring(normalized.encode(encoding), quotetabs=True)
+    encoded = quopri.encodestring(normalized.encode(encoding), quotetabs=False)
     return encoded.replace(b"\n", b"\r\n").decode("ascii")
