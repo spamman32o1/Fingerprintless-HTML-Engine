@@ -126,7 +126,7 @@ def random_css(
     allow_dark_mode: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
     strict_mode = is_strict_output_mode(output_mode)
-    super_strict = output_mode in {"super_strict", "libero"}
+    super_strict = output_mode == "super_strict"
     base_pool = pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
     base_font, base_is_variable = _build_font_stack(rng, base_pool)
     heading_font = None

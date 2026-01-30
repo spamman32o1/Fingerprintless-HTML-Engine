@@ -38,7 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses strict + super strict rendering rules and quoted-printable encoding in `.html` files).
+- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses strict rendering rules and quoted-printable encoding in `.html` files).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 
 ### 📂 Multiple Inputs
@@ -52,7 +52,7 @@ If you supply multiple input files, the engine will prompt to place outputs in a
 ```text
 Enter HTML file path: samples/page.html
 How many variants? 5
-Enable Libero mode for libero.it (writes quoted-printable super strict HTML)? y/n (default n):
+Enable Libero mode for libero.it (writes quoted-printable strict HTML)? y/n (default n):
 Enable strict mode (inline styles, no style blocks)? y/n (default n):
 Enable super strict mode for aggressive providers? y/n (default n):
 Optional synonym map file path (pipe-separated synonyms per line, blank to skip):
@@ -76,7 +76,7 @@ Gmail-friendly output, strict mode disables or avoids:
 
 ## 🧱 Super Strict Mode (Aggressive Providers)
 If you answer `y` to the follow-up prompt, the engine will switch to **super strict** mode
-for aggressive providers (e.g., libero.it) that may strip modern CSS or wrappers. Super strict
+for aggressive providers that may strip modern CSS or wrappers. Super strict
 mode builds on strict mode by further minimizing styling and layout variability:
 
 - **No noise or JSON-LD decoys**: skips metanoise, JSON-LD scripts, IE comments, and noise divs.
@@ -86,7 +86,7 @@ mode builds on strict mode by further minimizing styling and layout variability:
 
 ### 📬 Libero Mode Output Notes
 When Libero mode is enabled, the engine emits quoted-printable encoded `.html` files instead of
-wrapping the content as `.eml`. This keeps the output as HTML while still applying the strict
+wrapping the content as `.eml`. Libero mode keeps strict rendering rules while applying the strict
 encoding expected by providers like libero.it.
 
 ## 🧾 Metanoise
