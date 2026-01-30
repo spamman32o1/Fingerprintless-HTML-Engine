@@ -180,17 +180,21 @@ def _split_tag_attributes(tag: str) -> list[str]:
     return tokens
 
 
-def _split_html_tokens(html_text: str) -> list[str]:
+def _split_html_tokens(html_text: str) -> list[tuple[str, bool, int | None]]:
     parts = TAG_SPLIT_RE.split(html_text)
-    tokens: list[str] = []
+    tokens: list[tuple[str, bool, int | None]] = []
+    tag_index = 0
 
     for part in parts:
         if not part:
             continue
         if part.startswith("<") and part.endswith(">"):
-            tokens.extend(_split_tag_attributes(part))
+            tag_index += 1
+            for token in _split_tag_attributes(part):
+                tokens.append((token, True, tag_index))
         else:
-            tokens.extend(list(part))
+            for char in part:
+                tokens.append((char, False, None))
 
     return tokens
 
@@ -215,6 +219,9 @@ def _encode_quoted_printable_html(
     maxlinelen: int = 76,
     encoding: str,
     encode_equals: bool = True,
+    preserve_tags: bool = True,
+    wrap_inside_tags: bool = False,
+    tag_encode_equals: bool | None = None,
 ) -> str:
     lines: list[str] = []
     line: list[str] = []
@@ -251,26 +258,59 @@ def _encode_quoted_printable_html(
         line.append(segment)
         line_len += len(segment)
 
-    def _iter_encoded_segments(token: str) -> list[str]:
+    def _iter_encoded_segments(token: str, *, override_encode_equals: bool | None = None) -> list[str]:
         token_bytes = token.encode(encoding)
+        equals = encode_equals if override_encode_equals is None else override_encode_equals
         segments: list[str] = []
         for byte in token_bytes:
             if byte in (9, 32):
                 segment = chr(byte)
-            elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
+            elif 33 <= byte <= 126 and (byte != 61 or not equals):
                 segment = chr(byte)
             else:
                 segment = f"={byte:02X}"
             segments.append(segment)
         return segments
 
-    for token in _split_html_tokens(html_text):
+    tag_buffer: list[str] = []
+    current_tag: int | None = None
+
+    def _flush_tag_buffer() -> None:
+        nonlocal tag_buffer, current_tag
+        if not tag_buffer:
+            return
+        tag_text = "".join(tag_buffer)
+        tag_buffer = []
+        current_tag = None
+        if preserve_tags:
+            _add_segment(tag_text)
+            return
+        tag_equals = tag_encode_equals if tag_encode_equals is not None else encode_equals
+        if wrap_inside_tags:
+            for segment in _iter_encoded_segments(tag_text, override_encode_equals=tag_equals):
+                _add_segment(segment)
+        else:
+            encoded = "".join(_iter_encoded_segments(tag_text, override_encode_equals=tag_equals))
+            _add_segment(encoded)
+
+    for token, is_tag, tag_id in _split_html_tokens(html_text):
+        if is_tag:
+            if current_tag is None:
+                current_tag = tag_id
+            if tag_id != current_tag:
+                _flush_tag_buffer()
+                current_tag = tag_id
+            tag_buffer.append(token)
+            continue
+
+        _flush_tag_buffer()
         if token == "\n":
             _flush_line(add_soft_break=False)
             continue
         for segment in _iter_encoded_segments(token):
             _add_segment(segment)
 
+    _flush_tag_buffer()
     _flush_line(add_soft_break=False)
     return "\r\n".join(lines)
 
@@ -281,14 +321,22 @@ def encode_quoted_printable_html(
     encoding: str = "utf-8",
     encode_equals: bool = True,
     include_headers: bool = True,
+    tag_mode: str = "safe",
 ) -> str:
     """Encode HTML as quoted-printable text with CRLF line endings."""
+    if tag_mode not in {"safe", "encode"}:
+        raise ValueError(f"Unknown tag_mode: {tag_mode}")
+    preserve_tags = tag_mode == "safe"
+    wrap_inside_tags = tag_mode != "safe"
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
     body = _encode_quoted_printable_html(
         normalized,
         maxlinelen=76,
         encoding=encoding,
         encode_equals=encode_equals,
+        preserve_tags=preserve_tags,
+        wrap_inside_tags=wrap_inside_tags,
+        tag_encode_equals=False if tag_mode == "safe" else None,
     )
     if not include_headers:
         return body
