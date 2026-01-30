@@ -88,7 +88,7 @@ def main() -> None:
         base_max_nesting = Opt(count=count).max_nesting
 
     libero_mode = _prompt_yes_no(
-        "Enable Libero mode for libero.it (writes quoted-printable super strict HTML)? y/n (default n): ",
+        "Enable Libero mode for libero.it (writes quoted-printable strict HTML)? y/n (default n): ",
         default=False,
     )
     output_mode = "libero" if libero_mode else "default"
