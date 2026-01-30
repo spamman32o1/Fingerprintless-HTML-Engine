@@ -90,6 +90,44 @@ def tokenize_text_preserving_entities(text: str) -> List[tuple[str, str]]:
     return tokens
 
 
+def _extract_px_style_value(style_value: str | None, prop: str) -> str | None:
+    if not style_value:
+        return None
+    match = re.search(rf"{re.escape(prop)}\s*:\s*([0-9]+(?:\.[0-9]+)?)px", style_value, re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1).rstrip("0").rstrip(".")
+    return value or "0"
+
+
+def _add_attr_if_missing(tag: str, attr_name: str, attr_value: str) -> str:
+    if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
+        return tag
+
+    m = re.match(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$", tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    if any(parsed_name.lower() == attr_name.lower() for parsed_name, _, _ in attrs):
+        return tag
+
+    updated_attrs = [raw for _, raw, _ in attrs]
+    updated_attrs.append(f'{attr_name}="{attr_value}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
+
+
 def wrap_text_node_chunked(
     rng: random.Random,
     text: str,
@@ -281,6 +319,27 @@ def span_wrap_html(
                         if any(attr_name.lower() == "alt" for attr_name, _, _ in attrs):
                             # Alt text is intentionally randomized to reduce fingerprinting surface.
                             styled_tag = _update_attr_value(styled_tag, "alt", _random_alt_text(rng))
+                        has_width = any(attr_name.lower() == "width" for attr_name, _, _ in attrs)
+                        has_height = any(attr_name.lower() == "height" for attr_name, _, _ in attrs)
+                        if not has_width or not has_height:
+                            style_value = next(
+                                (value for attr_name, _, value in attrs if attr_name.lower() == "style"),
+                                None,
+                            )
+                            width_value = None
+                            height_value = None
+                            if not has_width:
+                                width_value = _extract_px_style_value(style_value, "width")
+                                if width_value is None:
+                                    width_value = "1"
+                            if not has_height:
+                                height_value = _extract_px_style_value(style_value, "height")
+                                if height_value is None:
+                                    height_value = "1"
+                            if width_value is not None:
+                                styled_tag = _add_attr_if_missing(styled_tag, "width", width_value)
+                            if height_value is not None:
+                                styled_tag = _add_attr_if_missing(styled_tag, "height", height_value)
 
             if m and name == "tbody" and not is_self_close:
                 if not is_close:
