@@ -24,3 +24,13 @@ def test_encode_quoted_printable_html_does_not_wrap_inside_attribute_values() ->
 
     url_index = body.index(long_url)
     assert "=\r\n" not in body[url_index : url_index + len(long_url)]
+
+
+def test_encode_quoted_printable_html_can_skip_headers() -> None:
+    html_text = "<p>Hello</p>"
+
+    encoded = encode_quoted_printable_html(html_text, include_headers=False)
+
+    assert "Content-Transfer-Encoding" not in encoded
+    assert "Content-Type" not in encoded
+    assert "\r\n\r\n" not in encoded
