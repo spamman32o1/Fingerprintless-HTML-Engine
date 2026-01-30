@@ -280,8 +280,9 @@ def encode_quoted_printable_html(
     *,
     encoding: str = "utf-8",
     encode_equals: bool = True,
+    include_headers: bool = True,
 ) -> str:
-    """Encode HTML as quoted-printable text with CRLF line endings and headers."""
+    """Encode HTML as quoted-printable text with CRLF line endings."""
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
     body = _encode_quoted_printable_html(
         normalized,
@@ -289,6 +290,8 @@ def encode_quoted_printable_html(
         encoding=encoding,
         encode_equals=encode_equals,
     )
+    if not include_headers:
+        return body
     headers = (
         "Content-Type: text/html; charset=UTF-8\r\n"
         "Content-Transfer-Encoding: quoted-printable\r\n"
