@@ -200,16 +200,17 @@ def _split_html_tokens(html_text: str) -> list[tuple[str, bool, int | None]]:
 
 
 def _encode_qp_token(token: str, *, encoding: str, encode_equals: bool) -> str:
-    token_bytes = token.encode(encoding)
     encoded: list[str] = []
-    for byte in token_bytes:
-        if byte in (9, 32):
-            segment = chr(byte)
-        elif 33 <= byte <= 126 and (byte != 61 or not encode_equals):
-            segment = chr(byte)
+    for char in token:
+        codepoint = ord(char)
+        if codepoint in (9, 32):
+            encoded.append(char)
+        elif 33 <= codepoint <= 126 and (char != "=" or not encode_equals):
+            encoded.append(char)
+        elif codepoint < 32 or codepoint == 127 or (char == "=" and encode_equals):
+            encoded.append(f"={codepoint:02X}")
         else:
-            segment = f"={byte:02X}"
-        encoded.append(segment)
+            encoded.append(char)
     return "".join(encoded)
 
 
@@ -259,17 +260,18 @@ def _encode_quoted_printable_html(
         line_len += len(segment)
 
     def _iter_encoded_segments(token: str, *, override_encode_equals: bool | None = None) -> list[str]:
-        token_bytes = token.encode(encoding)
         equals = encode_equals if override_encode_equals is None else override_encode_equals
         segments: list[str] = []
-        for byte in token_bytes:
-            if byte in (9, 32):
-                segment = chr(byte)
-            elif 33 <= byte <= 126 and (byte != 61 or not equals):
-                segment = chr(byte)
+        for char in token:
+            codepoint = ord(char)
+            if codepoint in (9, 32):
+                segments.append(char)
+            elif 33 <= codepoint <= 126 and (char != "=" or not equals):
+                segments.append(char)
+            elif codepoint < 32 or codepoint == 127 or (char == "=" and equals):
+                segments.append(f"={codepoint:02X}")
             else:
-                segment = f"={byte:02X}"
-            segments.append(segment)
+                segments.append(char)
         return segments
 
     tag_buffer: list[str] = []
