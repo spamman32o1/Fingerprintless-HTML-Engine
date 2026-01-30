@@ -216,7 +216,7 @@ def _encode_qp_token(token: str, *, encoding: str, encode_equals: bool) -> str:
 def _encode_quoted_printable_html(
     html_text: str,
     *,
-    maxlinelen: int = 76,
+    maxlinelen: int | None = 76,
     encoding: str,
     encode_equals: bool = True,
     preserve_tags: bool = True,
@@ -226,7 +226,7 @@ def _encode_quoted_printable_html(
     lines: list[str] = []
     line: list[str] = []
     line_len = 0
-    soft_break_limit = maxlinelen - 1
+    soft_break_limit = None if maxlinelen is None else maxlinelen - 1
 
     def _encode_trailing_whitespace() -> None:
         nonlocal line_len
@@ -253,7 +253,7 @@ def _encode_quoted_printable_html(
 
     def _add_segment(segment: str) -> None:
         nonlocal line_len
-        if line_len + len(segment) > soft_break_limit and line:
+        if soft_break_limit is not None and line_len + len(segment) > soft_break_limit and line:
             _flush_line(add_soft_break=True)
         line.append(segment)
         line_len += len(segment)
@@ -322,6 +322,7 @@ def encode_quoted_printable_html(
     encode_equals: bool = True,
     include_headers: bool = True,
     tag_mode: str = "safe",
+    maxlinelen: int | None = 76,
 ) -> str:
     """Encode HTML as quoted-printable text with CRLF line endings."""
     if tag_mode not in {"safe", "encode"}:
@@ -331,7 +332,7 @@ def encode_quoted_printable_html(
     normalized = html_text.replace("\r\n", "\n").replace("\r", "\n")
     body = _encode_quoted_printable_html(
         normalized,
-        maxlinelen=76,
+        maxlinelen=maxlinelen,
         encoding=encoding,
         encode_equals=encode_equals,
         preserve_tags=preserve_tags,
