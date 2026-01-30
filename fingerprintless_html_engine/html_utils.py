@@ -289,8 +289,12 @@ def _encode_quoted_printable_html(
             return
         tag_equals = tag_encode_equals if tag_encode_equals is not None else encode_equals
         if wrap_inside_tags:
-            for segment in _iter_encoded_segments(tag_text, override_encode_equals=tag_equals):
-                _add_segment(segment)
+            encoded_tag = _encode_qp_token(tag_text, encoding=encoding, encode_equals=tag_equals)
+            if soft_break_limit is None or len(encoded_tag) <= soft_break_limit:
+                _add_segment(encoded_tag)
+                return
+            for token in _split_tag_attributes(tag_text):
+                _add_segment(_encode_qp_token(token, encoding=encoding, encode_equals=tag_equals))
         else:
             encoded = "".join(_iter_encoded_segments(tag_text, override_encode_equals=tag_equals))
             _add_segment(encoded)
