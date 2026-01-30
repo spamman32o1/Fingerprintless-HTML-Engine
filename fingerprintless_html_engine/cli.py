@@ -60,10 +60,12 @@ def main() -> None:
     count = prompt_int("How many variants? ", lo=1)
 
     synonym_lines: List[str] = []
+    synonym_path = ""
     while True:
-        synonym_path = input(
-            "Optional synonym map file path (pipe-separated synonyms per line, blank to skip): "
-        ).strip().strip('"').strip("'")
+        if not synonym_path:
+            synonym_path = input(
+                "Optional synonym map file path (pipe-separated synonyms per line, blank to skip): "
+            ).strip().strip('"').strip("'")
         if not synonym_path:
             break
         path = Path(synonym_path)
