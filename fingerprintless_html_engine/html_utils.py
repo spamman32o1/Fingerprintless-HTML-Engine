@@ -37,6 +37,13 @@ INLINE_TAGS = {
 INTERTAG_WHITESPACE_RE = re.compile(
     r"(</?\s*([a-zA-Z0-9:_-]+)[^>]*>)\s+(<\s*/?\s*([a-zA-Z0-9:_-]+)[^>]*>)"
 )
+META_TAG_RE = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
+META_ATTR_RE = re.compile(
+    r"([^\s=]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'=<>`]+))",
+    re.IGNORECASE,
+)
+META_REFRESH_CONTENT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:;(?P<rest>.*))?$", re.IGNORECASE)
+META_REFRESH_URL_RE = re.compile(r"url\s*=\s*(?P<quote>['\"]?)(?P<url>[^'\";]+)(?P=quote)?", re.IGNORECASE)
 
 
 def _collapse_intertag_whitespace(html_text: str) -> str:
@@ -54,6 +61,38 @@ def extract_lang(html_in: str) -> str:
     if m:
         return m.group(1)
     return "en"
+
+
+def _parse_tag_attributes(tag: str) -> dict[str, str]:
+    attrs: dict[str, str] = {}
+    for match in META_ATTR_RE.finditer(tag):
+        key = match.group(1).lower()
+        value = match.group(2) or match.group(3) or match.group(4) or ""
+        attrs[key] = value
+    return attrs
+
+
+def extract_meta_refresh_redirects(html_text: str) -> list[tuple[float, str]]:
+    redirects: list[tuple[float, str]] = []
+    for tag in META_TAG_RE.findall(html_text):
+        attrs = _parse_tag_attributes(tag)
+        http_equiv = attrs.get("http-equiv", "")
+        if http_equiv.lower() != "refresh":
+            continue
+        content = attrs.get("content", "")
+        content_match = META_REFRESH_CONTENT_RE.match(content)
+        if not content_match:
+            continue
+        delay = float(content_match.group(1))
+        rest = content_match.group("rest") or ""
+        url_match = META_REFRESH_URL_RE.search(rest)
+        if not url_match:
+            continue
+        url = url_match.group("url").strip()
+        if not url:
+            continue
+        redirects.append((delay, url))
+    return redirects
 
 
 def extract_body_content(html_in: str) -> str:

@@ -6,7 +6,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
+from .html_utils import (
+    encode_quoted_printable_html,
+    extract_body_content,
+    extract_lang,
+    extract_meta_refresh_redirects,
+    sanitize_input_html,
+)
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
 from .text_utils import build_synonym_patterns, parse_synonym_lines
@@ -165,6 +171,56 @@ def main() -> None:
             maxlinelen=None,
         )
 
+    redirect_entries_by_outdir: dict[Path, dict[str, list[tuple[float, str, str]]]] = {}
+
+    redirect_buckets: list[tuple[str, float | None, float | None]] = [
+        ("redirects_wait_le_0.5s.txt", None, 0.5),
+        ("redirects_wait_gt_0.5s_le_1.5s.txt", 0.5, 1.5),
+        ("redirects_wait_gt_1.5s_le_3s.txt", 1.5, 3.0),
+        ("redirects_wait_gt_3s_le_5s.txt", 3.0, 5.0),
+        ("redirects_wait_gt_5s_le_10s.txt", 5.0, 10.0),
+        ("redirects_wait_gt_10s.txt", 10.0, None),
+    ]
+
+    def _bucket_for_delay(delay: float) -> str:
+        for filename, lower, upper in redirect_buckets:
+            if lower is None and delay <= upper:
+                return filename
+            if upper is None and delay > lower:
+                return filename
+            if lower is not None and upper is not None and lower < delay <= upper:
+                return filename
+        return redirect_buckets[-1][0]
+
+    def _load_redirect_entries(path: Path) -> list[tuple[float, str, str]]:
+        if not path.exists():
+            return []
+        entries: list[tuple[float, str, str]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t", 2)
+            if len(parts) != 3:
+                continue
+            delay_str, url, source = parts
+            try:
+                delay = float(delay_str)
+            except ValueError:
+                continue
+            entries.append((delay, url, source))
+        return entries
+
+    def _write_redirect_entries(outdir: Path, entries: dict[str, list[tuple[float, str, str]]]) -> None:
+        for filename, _, _ in redirect_buckets:
+            bucket_entries = entries.get(filename, [])
+            if not bucket_entries:
+                continue
+            output_file = outdir / filename
+            combined = _load_redirect_entries(output_file) + bucket_entries
+            combined.sort(key=lambda item: item[0])
+            lines = [f"{delay:g}\t{url}\t{source}" for delay, url, source in combined]
+            output_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
         sanitized = sanitize_input_html(raw_html)
@@ -182,6 +238,7 @@ def main() -> None:
         for i in range(1, opt.count + 1):
             variant_title = random_title()
             variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
+            redirects = extract_meta_refresh_redirects(variant)
             if opt.output_mode == "libero":
                 variant = _build_libero_html(variant)
                 output_name = f"{filename_prefix}variant_{i:03d}.html"
@@ -189,7 +246,17 @@ def main() -> None:
                 output_name = f"{filename_prefix}variant_{i:03d}.html"
             (outdir / output_name).write_text(variant, encoding="utf-8")
 
+            if redirects:
+                out_entries = redirect_entries_by_outdir.setdefault(outdir, {})
+                source_id = f"{input_path.name}:{output_name}"
+                for delay, url in redirects:
+                    bucket = _bucket_for_delay(delay)
+                    out_entries.setdefault(bucket, []).append((delay, url, source_id))
+
         output_locations.append(outdir.resolve())
+
+    for outdir, entries in redirect_entries_by_outdir.items():
+        _write_redirect_entries(outdir, entries)
 
     if output_path_mode == "same":
         print(f"\nDone. Wrote {opt.count * len(input_paths)} files to: {base_outdir.resolve()}")

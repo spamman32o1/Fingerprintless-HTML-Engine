@@ -30,6 +30,22 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 
 The script outputs a timestamped `variants_YYYYMMDD_HHMMSS` directory filled with variant HTML files.
 
+### 🔁 Redirect Extraction Output
+If generated variants include a hardcoded meta refresh redirect (e.g., `<meta http-equiv="refresh" content="0; url=https://example.com">`),
+the CLI will extract the delay and target URL and write bucketed TXT reports alongside the HTML variants.
+Each line is `delay<TAB>url<TAB>source` where `source` is the input file name and variant file identifier.
+
+Buckets are written using deterministic file names:
+
+- `redirects_wait_le_0.5s.txt` (`<=0.5s`)
+- `redirects_wait_gt_0.5s_le_1.5s.txt` (`>0.5s && <=1.5s`)
+- `redirects_wait_gt_1.5s_le_3s.txt` (`>1.5s && <=3s`)
+- `redirects_wait_gt_3s_le_5s.txt` (`>3s && <=5s`)
+- `redirects_wait_gt_5s_le_10s.txt` (`>5s && <=10s`)
+- `redirects_wait_gt_10s.txt` (`>10s`)
+
+Entries are sorted by delay (ascending) within each file.
+
 ### 🧭 CLI Options
 Run `./script.py --help` to see all flags. Common switches include:
 
