@@ -30,6 +30,7 @@ class Opt:
     enable_gradients: bool = True
     enable_noise_textures: bool = True
     enable_color_palette_randomization: bool = True
+    enable_font_features: bool = True
     enable_span_wrapping: bool = True
     enable_alt_text_randomization: bool = True
     enable_meta_noise: bool = True

@@ -47,6 +47,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_gradients=opt.enable_gradients,
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
+        enable_font_features=opt.enable_font_features,
         enable_span_wrapping=opt.enable_span_wrapping,
         enable_alt_text_randomization=opt.enable_alt_text_randomization,
         enable_meta_noise=opt.enable_meta_noise,
@@ -86,6 +87,7 @@ def build_variant(
         enable_gradients=opt.enable_gradients,
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
+        enable_font_features=opt.enable_font_features,
     )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"

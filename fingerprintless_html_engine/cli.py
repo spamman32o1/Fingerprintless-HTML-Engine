@@ -63,6 +63,12 @@ def main() -> None:
         help="Disable randomized font stack selection.",
     )
     parser.add_argument(
+        "--no-font-features",
+        action="store_false",
+        dest="enable_font_features",
+        help="Disable randomized font feature rules (variation settings, kerning, optical sizing, etc.).",
+    )
+    parser.add_argument(
         "--no-gradients",
         action="store_false",
         dest="enable_gradients",
@@ -191,6 +197,7 @@ def main() -> None:
         enable_gradients=args.enable_gradients,
         enable_noise_textures=args.enable_noise_textures,
         enable_color_palette_randomization=args.enable_color_palette_randomization,
+        enable_font_features=args.enable_font_features,
         enable_span_wrapping=args.enable_span_wrapping,
         enable_alt_text_randomization=args.enable_alt_text_randomization,
         enable_meta_noise=args.enable_meta_noise,

@@ -161,7 +161,7 @@ def wrap_text_node_chunked(
             chunk_out = "".join(rendered)
             if maybe(rng, 0.28):
                 out.append(
-                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block, enable_font_features=opt.enable_font_features)}">'
                     f"{chunk_out}</span>"
                 )
             else:
@@ -183,7 +183,7 @@ def wrap_text_node_chunked(
         if kind == "entity":
             if maybe(rng, wrap_chunk_rate * 0.30):
                 out.append(
-                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block, enable_font_features=opt.enable_font_features)}">'
                     f"{val}</span>"
                 )
             else:
@@ -208,7 +208,7 @@ def wrap_text_node_chunked(
                 j += 1
             if chunk:
                 out.append(
-                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
+                    f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block, enable_font_features=opt.enable_font_features)}">'
                     f'{"".join(chunk)}</span>'
                 )
                 i = j
