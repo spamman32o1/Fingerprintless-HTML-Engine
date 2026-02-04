@@ -38,7 +38,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-structure-randomize`: Disable wrapper structure shuffling.
 - `--max-nesting`: Override maximum wrapper nesting depth.
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
-- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses strict rendering rules and quoted-printable encoding in `.html` files).
+- Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses super strict rendering rules and quoted-printable encoding in `.html` files).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 
 ### 📂 Multiple Inputs
@@ -86,7 +86,7 @@ mode builds on strict mode by further minimizing styling and layout variability:
 
 ### 📬 Libero Mode Output Notes
 When Libero mode is enabled, the engine emits quoted-printable encoded `.html` files instead of
-wrapping the content as `.eml`. Libero mode keeps strict rendering rules while applying the strict
+wrapping the content as `.eml`. Libero mode keeps super strict rendering rules while applying the strict
 encoding expected by providers like libero.it.
 
 ## 🧾 Metanoise
