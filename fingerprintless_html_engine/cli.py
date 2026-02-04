@@ -134,6 +134,12 @@ def main() -> None:
         dest="enable_layout_randomization",
         help="Disable randomized layout table selection and placement.",
     )
+    parser.add_argument(
+        "--no-body-styles",
+        action="store_false",
+        dest="enable_body_styles",
+        help="Disable body-level styling rules (no body styles or background rendering).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -212,6 +218,7 @@ def main() -> None:
         enable_noise_divs=args.enable_noise_divs,
         enable_wrapper_nesting=args.enable_wrapper_nesting,
         enable_layout_randomization=args.enable_layout_randomization,
+        enable_body_styles=args.enable_body_styles,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"

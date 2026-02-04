@@ -131,6 +131,7 @@ def random_css(
     enable_gradients: bool = True,
     enable_noise_textures: bool = True,
     enable_color_palette_randomization: bool = True,
+    enable_body_styles: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
@@ -325,7 +326,7 @@ def random_css(
     if enable_noise_textures and not super_strict and maybe(rng, 0.18):
         body_background_images.append(pick(rng, noise_textures))
 
-    use_css_vars = maybe(rng, 0.32)
+    use_css_vars = maybe(rng, 0.32) if enable_body_styles else False
     accent_candidates = [
         "#0ea5e9",
         "#2563eb",
@@ -353,77 +354,82 @@ def random_css(
     use_bg_var = use_css_vars and maybe(rng, 0.55)
     use_accent_var = use_css_vars and maybe(rng, 0.55)
 
-    body_rules = [
-        "margin: 0;",
-        f"background-color: {'var(--bg)' if use_bg_var else bg_color};",
-        f"color: {text_color};",
-        f"opacity: {opacity};",
-    ]
-    if use_css_vars:
-        body_rules.append(f"--accent: {accent_var};")
-        body_rules.append(f"--bg: {bg_var};")
-    if enable_font_css:
-        body_rules.extend(
-            [
-                f"font-family: {base_font};",
-                f"font-size: {font_size}px;",
-                f"line-height: {line_height};",
-                f"letter-spacing: {letter_spacing}em;",
-                f"word-spacing: {word_spacing}em;",
-            ]
-        )
-        if maybe(rng, 0.36):
-            if base_is_variable and maybe(rng, 0.55):
-                low = rng.randint(380, 520)
-                high = rng.randint(low + 40, min(650, low + 160))
-                body_rules.append(f"font-weight:{low} {high};")
-            else:
-                body_rules.append(f"font-weight:{rng.randint(380, 620)};")
-        if maybe(rng, 0.26):
-            if maybe(rng, 0.45):
-                body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
-            else:
-                body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
-        if maybe(rng, 0.18):
-            body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
-        if enable_font_features and maybe(rng, 0.20):
-            feature_value = pick(
-                rng,
-                ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
-            )
-            body_rules.append(f"font-feature-settings:{feature_value};")
-        if maybe(rng, 0.20):
-            body_rules.append(
-                f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
-            )
-        if maybe(rng, 0.14):
-            body_rules.append(
-                f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
-            )
-        if maybe(rng, 0.14):
-            body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
-        if enable_font_features:
+    body_css = ""
+    if enable_body_styles:
+        body_rules = [
+            "margin: 0;",
+            f"background-color: {'var(--bg)' if use_bg_var else bg_color};",
+            f"color: {text_color};",
+            f"opacity: {opacity};",
+        ]
+        if use_css_vars:
+            body_rules.append(f"--accent: {accent_var};")
+            body_rules.append(f"--bg: {bg_var};")
+        if enable_font_css:
             body_rules.extend(
-                _maybe_font_details(
+                [
+                    f"font-family: {base_font};",
+                    f"font-size: {font_size}px;",
+                    f"line-height: {line_height};",
+                    f"letter-spacing: {letter_spacing}em;",
+                    f"word-spacing: {word_spacing}em;",
+                ]
+            )
+            if maybe(rng, 0.36):
+                if base_is_variable and maybe(rng, 0.55):
+                    low = rng.randint(380, 520)
+                    high = rng.randint(low + 40, min(650, low + 160))
+                    body_rules.append(f"font-weight:{low} {high};")
+                else:
+                    body_rules.append(f"font-weight:{rng.randint(380, 620)};")
+            if maybe(rng, 0.26):
+                if maybe(rng, 0.45):
+                    body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
+                else:
+                    body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
+            if maybe(rng, 0.18):
+                body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
+            if enable_font_features and maybe(rng, 0.20):
+                feature_value = pick(
                     rng,
-                    allow_variations=base_is_variable,
+                    ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
                 )
+                body_rules.append(f"font-feature-settings:{feature_value};")
+            if maybe(rng, 0.20):
+                body_rules.append(
+                    f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
+                )
+            if maybe(rng, 0.14):
+                body_rules.append(
+                    f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
+                )
+            if maybe(rng, 0.14):
+                body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
+            if enable_font_features:
+                body_rules.extend(
+                    _maybe_font_details(
+                        rng,
+                        allow_variations=base_is_variable,
+                    )
+                )
+
+        if body_background_images and not super_strict:
+            body_rules.append(f"background-image: {', '.join(body_background_images)};")
+        if body_background_images and not super_strict and maybe(rng, 0.28):
+            body_rules.append(
+                f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};"
+            )
+        if body_background_images and not super_strict and maybe(rng, 0.22):
+            body_rules.append(
+                "background-position: "
+                f"{pick(rng, ['center', 'top left', 'top right', 'bottom left', 'bottom right'])};"
+            )
+        if body_background_images and not super_strict and maybe(rng, 0.18):
+            body_rules.append(
+                f"background-attachment: {pick(rng, ['scroll', 'fixed', 'local'])};"
             )
 
-    if body_background_images and not super_strict:
-        body_rules.append(f"background-image: {', '.join(body_background_images)};")
-    if body_background_images and not super_strict and maybe(rng, 0.28):
-        body_rules.append(f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};")
-    if body_background_images and not super_strict and maybe(rng, 0.22):
-        body_rules.append(
-            f"background-position: {pick(rng, ['center', 'top left', 'top right', 'bottom left', 'bottom right'])};"
-        )
-    if body_background_images and not super_strict and maybe(rng, 0.18):
-        body_rules.append(
-            f"background-attachment: {pick(rng, ['scroll', 'fixed', 'local'])};"
-        )
-
-    body_css = " ".join(body_rules)
+        body_css = " ".join(body_rules)
 
     border_rad = rfloat(rng, 12.0, 20.0, 2)
     border = "none"
