@@ -43,6 +43,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-body-styles`: Disable body-level styling rules (removes body background, colors, and inline body style output).
 - `--no-layout-tables`: Disable layout table wrappers and force plain layout containers (even in strict/super strict modes).
 - `--no-wrapper-styles`: Disable wrapper padding/margin/border/box-shadow styling on the outer wrapper.
+- `--pretty-output` / `--no-pretty-output`: Pretty-print output HTML with newlines/indentation (defaults ON in Libero mode, OFF otherwise).
 - Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses super strict rendering rules and quoted-printable encoding in `.html` files).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 

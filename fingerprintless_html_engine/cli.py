@@ -152,6 +152,20 @@ def main() -> None:
         dest="enable_body_styles",
         help="Disable body-level styling rules (no body styles or background rendering).",
     )
+    parser.add_argument(
+        "--pretty-output",
+        action="store_true",
+        dest="pretty_output",
+        default=None,
+        help="Pretty-print output HTML with indentation and newlines (defaults on in Libero mode).",
+    )
+    parser.add_argument(
+        "--no-pretty-output",
+        action="store_false",
+        dest="pretty_output",
+        default=None,
+        help="Disable pretty-print output formatting (overrides Libero default).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -194,6 +208,9 @@ def main() -> None:
         default=False,
     )
     output_mode = "libero" if libero_mode else "default"
+    pretty_output = args.pretty_output
+    if pretty_output is None:
+        pretty_output = libero_mode
     if not libero_mode:
         strict_mode = _prompt_yes_no(
             "Enable strict mode (inline styles, no style blocks)? y/n (default n): ",
@@ -233,6 +250,7 @@ def main() -> None:
         enable_body_styles=args.enable_body_styles,
         disable_layout_tables=args.disable_layout_tables,
         disable_wrapper_styles=args.disable_wrapper_styles,
+        pretty_output=pretty_output,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"

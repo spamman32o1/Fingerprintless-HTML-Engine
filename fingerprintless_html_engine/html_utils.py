@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 
-from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE
+from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE, VOID_ELEMENTS
+from .models import _HtmlNode
 from .tag_utils import normalize_input_html
 
 INLINE_TAGS = {
@@ -85,7 +86,119 @@ def sanitize_input_html(html_in: str) -> str:
     return _collapse_intertag_whitespace(normalized)
 
 
-def minify_output_html(html_text: str) -> str:
+def _parse_html_nodes(html_in: str) -> _HtmlNode:
+    parts = TAG_SPLIT_RE.split(html_in)
+    root = _HtmlNode(tag="__root__", open_tag="", close_tag="", children=[], text="")
+    stack = [root]
+
+    for part in parts:
+        if not part:
+            continue
+
+        if part.startswith("<") and part.endswith(">"):
+            if part.startswith("</"):
+                name = _tag_name(part)
+                if name and len(stack) > 1 and stack[-1].tag == name:
+                    stack[-1].close_tag = part
+                    stack.pop()
+                else:
+                    stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            if part.startswith("<!") or part.startswith("<?"):
+                stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            name = _tag_name(part)
+            if not name:
+                stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+                continue
+
+            is_self_closing = part.rstrip().endswith("/>") or name in VOID_ELEMENTS
+            node = _HtmlNode(tag=name, open_tag=part, close_tag=None, children=[], text="", self_closing=is_self_closing)
+            stack[-1].children.append(node)
+            if not is_self_closing:
+                stack.append(node)
+            continue
+
+        stack[-1].children.append(_HtmlNode(None, "", None, [], part))
+
+    return root
+
+
+def _tag_name(tag_text: str) -> str | None:
+    m = re.match(r"^</?\s*([a-zA-Z0-9:_-]+)", tag_text)
+    if not m:
+        return None
+    return m.group(1).lower()
+
+
+def _is_inline_tag(tag_name: str | None) -> bool:
+    return bool(tag_name and (tag_name in INLINE_TAGS or tag_name in VOID_ELEMENTS))
+
+
+def _render_inline(node: _HtmlNode) -> str:
+    if node.tag is None:
+        return node.text
+    if node.self_closing or node.tag in VOID_ELEMENTS:
+        return node.open_tag
+    inner = "".join(_render_inline(child) for child in node.children)
+    close = node.close_tag or f"</{node.tag}>"
+    return f"{node.open_tag}{inner}{close}"
+
+
+def _format_block(node: _HtmlNode, indent: str, level: int) -> list[str]:
+    if node.tag is None:
+        text = node.text.strip()
+        return [f"{indent * level}{text}"] if text else []
+
+    if node.self_closing or node.tag in VOID_ELEMENTS:
+        return [f"{indent * level}{node.open_tag}"]
+
+    is_inline_only = all(child.tag is None or _is_inline_tag(child.tag) for child in node.children)
+    open_tag = node.open_tag
+    close_tag = node.close_tag or f"</{node.tag}>"
+
+    if is_inline_only:
+        inner = "".join(_render_inline(child) for child in node.children)
+        return [f"{indent * level}{open_tag}{inner}{close_tag}"]
+
+    lines = [f"{indent * level}{open_tag}"]
+    inline_buffer: list[str] = []
+    for child in node.children:
+        if child.tag is None or _is_inline_tag(child.tag):
+            inline_buffer.append(_render_inline(child))
+            continue
+        if inline_buffer:
+            inline_content = "".join(inline_buffer)
+            if inline_content.strip():
+                lines.append(f"{indent * (level + 1)}{inline_content}")
+            inline_buffer = []
+        lines.extend(_format_block(child, indent, level + 1))
+
+    if inline_buffer:
+        inline_content = "".join(inline_buffer)
+        if inline_content.strip():
+            lines.append(f"{indent * (level + 1)}{inline_content}")
+
+    lines.append(f"{indent * level}{close_tag}")
+    return lines
+
+
+def _pretty_format_html(html_text: str, *, indent: str = "    ") -> str:
+    root = _parse_html_nodes(html_text)
+    lines: list[str] = []
+    for child in root.children:
+        if child.tag is None:
+            text = child.text.strip()
+            if text:
+                lines.append(text)
+            continue
+        lines.extend(_format_block(child, indent, 0))
+    return "\n".join(lines)
+
+
+def minify_output_html(html_text: str, *, pretty_output: bool = False) -> str:
     parts = TAG_SPLIT_RE.split(html_text)
     out: list[str] = []
     tagname_re = re.compile(r"^</?\s*([a-zA-Z0-9:_-]+)")
@@ -143,10 +256,15 @@ def minify_output_html(html_text: str) -> str:
             collapsed = re.sub(r"\s+", " ", segment)
             if collapsed.strip():
                 out.append(collapsed)
+            elif pretty_output and collapsed:
+                out.append(" ")
 
     minified = "".join(out)
     minified = _collapse_intertag_whitespace(minified)
-    return minified.strip()
+    minified = minified.strip()
+    if pretty_output:
+        return _pretty_format_html(minified)
+    return minified
 
 
 def _split_tag_attributes(tag: str) -> list[str]:

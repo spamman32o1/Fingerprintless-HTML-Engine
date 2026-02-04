@@ -59,6 +59,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_body_styles=opt.enable_body_styles,
         disable_layout_tables=opt.disable_layout_tables,
         disable_wrapper_styles=opt.disable_wrapper_styles,
+        pretty_output=opt.pretty_output,
     )
 
 
@@ -176,7 +177,7 @@ def build_variant(
         disable_layout_tables=opt.disable_layout_tables,
         disable_wrapper_styles=opt.disable_wrapper_styles,
     )
-    return minify_output_html(rendered)
+    return minify_output_html(rendered, pretty_output=opt.pretty_output)
 
 
 def build_layout_template(

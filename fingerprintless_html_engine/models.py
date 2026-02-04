@@ -42,6 +42,7 @@ class Opt:
     enable_body_styles: bool = True
     disable_layout_tables: bool = False
     disable_wrapper_styles: bool = False
+    pretty_output: bool = False
 
 
 @dataclass
