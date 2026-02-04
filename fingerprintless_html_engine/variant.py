@@ -49,6 +49,11 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
         enable_span_wrapping=opt.enable_span_wrapping,
         enable_alt_text_randomization=opt.enable_alt_text_randomization,
+        enable_meta_noise=opt.enable_meta_noise,
+        enable_jsonld_noise=opt.enable_jsonld_noise,
+        enable_noise_divs=opt.enable_noise_divs,
+        enable_wrapper_nesting=opt.enable_wrapper_nesting,
+        enable_layout_randomization=opt.enable_layout_randomization,
     )
 
 
@@ -95,20 +100,36 @@ def build_variant(
         inline_styles=inline_styles if opt.output_mode == "strict" else None,
         wrap_spans=not strict_mode and opt.enable_span_wrapping,
     )
-    jsonld_scripts = "" if super_strict else build_fake_jsonld_scripts(rng)
+    jsonld_scripts = (
+        ""
+        if super_strict or not opt.enable_jsonld_noise
+        else build_fake_jsonld_scripts(rng)
+    )
 
     if not strict_mode:
         ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
         ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
-        before = ie_before + noise_divs(rng, opt.noise_divs_max)
-        after = noise_divs(rng, opt.noise_divs_max) + ie_after
+        before = ie_before + noise_divs(
+            rng,
+            opt.noise_divs_max,
+            enabled=opt.enable_noise_divs,
+        )
+        after = noise_divs(
+            rng,
+            opt.noise_divs_max,
+            enabled=opt.enable_noise_divs,
+        ) + ie_after
     else:
         ie_before = ""
         ie_after = ""
         before = ""
         after = ""
 
-    depth = 0 if super_strict else rint(rng, 1, max(1, opt.max_nesting))
+    depth = (
+        0
+        if super_strict or not opt.enable_wrapper_nesting
+        else rint(rng, 1, max(1, opt.max_nesting))
+    )
     open_wrap = ""
     close_wrap = ""
     for _ in range(depth):
@@ -140,6 +161,8 @@ def build_variant(
         extra_css=extra_css,
         output_mode=opt.output_mode,
         allow_ie_conditional_comments=opt.ie_condition_randomize,
+        enable_meta_noise=opt.enable_meta_noise,
+        enable_layout_randomization=opt.enable_layout_randomization,
     )
     return minify_output_html(rendered)
 
@@ -161,6 +184,8 @@ def build_layout_template(
     extra_css: str,
     output_mode: str,
     allow_ie_conditional_comments: bool = True,
+    enable_meta_noise: bool = True,
+    enable_layout_randomization: bool = True,
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
@@ -184,7 +209,7 @@ def build_layout_template(
         "<meta charset=\"utf-8\" />"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
         "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
-        f"{meta_noise(rng) if not strict_mode else ''}"
+        f"{meta_noise(rng, enabled=enable_meta_noise) if not strict_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
         f"{jsonld_scripts}"
@@ -215,10 +240,13 @@ def build_layout_template(
         )
         table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
 
-    placement = "inner" if super_strict else pick(
-        rng,
-        ["inner", "body-outside", "mixed-before", "mixed-after"],
-    )
+    if super_strict or not enable_layout_randomization:
+        placement = "inner"
+    else:
+        placement = pick(
+            rng,
+            ["inner", "body-outside", "mixed-before", "mixed-after"],
+        )
     before_body = ""
     after_body = ""
     before_inner = ""
@@ -264,10 +292,12 @@ def build_layout_template(
         outer_layer_open = f"<{outer_tag}{role}>"
         outer_layer_close = f"</{outer_tag}>"
 
-    layout_choice = (
-        "outer-table-fallback"
-        if super_strict
-        else pick(
+    if super_strict:
+        layout_choice = "outer-table-fallback"
+    elif not enable_layout_randomization:
+        layout_choice = "plain"
+    else:
+        layout_choice = pick(
             rng,
             [
                 "outer-table",
@@ -277,7 +307,6 @@ def build_layout_template(
                 "plain",
             ],
         )
-    )
     use_outer_table = layout_choice in {"outer-table", "outer-table-fallback", "outer-table-inner"}
     use_inner_table = layout_choice in {"outer-table-inner", "inner-only"}
     use_commented_table = layout_choice == "outer-table-fallback" and allow_ie_conditional_comments

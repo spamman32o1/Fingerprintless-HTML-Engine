@@ -32,6 +32,11 @@ class Opt:
     enable_color_palette_randomization: bool = True
     enable_span_wrapping: bool = True
     enable_alt_text_randomization: bool = True
+    enable_meta_noise: bool = True
+    enable_jsonld_noise: bool = True
+    enable_noise_divs: bool = True
+    enable_wrapper_nesting: bool = True
+    enable_layout_randomization: bool = True
 
 
 @dataclass
