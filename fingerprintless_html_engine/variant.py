@@ -125,6 +125,7 @@ def build_variant(
         jsonld_scripts=jsonld_scripts,
         extra_css=extra_css,
         output_mode=opt.output_mode,
+        allow_ie_conditional_comments=opt.ie_condition_randomize,
     )
     return minify_output_html(rendered)
 
@@ -145,6 +146,7 @@ def build_layout_template(
     jsonld_scripts: str,
     extra_css: str,
     output_mode: str,
+    allow_ie_conditional_comments: bool = True,
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
@@ -190,11 +192,14 @@ def build_layout_template(
     )
     inner_table_close = "</td></tr></table>"
 
-    table_fallback_open = (
-        "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
-        "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
-    )
-    table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
+    table_fallback_open = ""
+    table_fallback_close = ""
+    if allow_ie_conditional_comments:
+        table_fallback_open = (
+            "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
+            "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
+        )
+        table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
 
     placement = "inner" if super_strict else pick(
         rng,
@@ -261,7 +266,7 @@ def build_layout_template(
     )
     use_outer_table = layout_choice in {"outer-table", "outer-table-fallback", "outer-table-inner"}
     use_inner_table = layout_choice in {"outer-table-inner", "inner-only"}
-    use_commented_table = layout_choice == "outer-table-fallback"
+    use_commented_table = layout_choice == "outer-table-fallback" and allow_ie_conditional_comments
 
     wrapper_default = build_wrapper(content_inner)
     body_inner = wrapper_default
