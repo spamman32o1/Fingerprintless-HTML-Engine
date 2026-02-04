@@ -56,6 +56,7 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_noise_divs=opt.enable_noise_divs,
         enable_wrapper_nesting=opt.enable_wrapper_nesting,
         enable_layout_randomization=opt.enable_layout_randomization,
+        enable_body_styles=opt.enable_body_styles,
     )
 
 
@@ -90,6 +91,7 @@ def build_variant(
         enable_gradients=opt.enable_gradients,
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
+        enable_body_styles=opt.enable_body_styles,
     )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
@@ -193,19 +195,23 @@ def build_layout_template(
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
-    body_style_attr = f' style="{html.escape(body_css, quote=True)}"' if strict_mode else ""
+    body_style_attr = (
+        f' style="{html.escape(body_css, quote=True)}"' if strict_mode and body_css else ""
+    )
     wrapper_style_attr = f' style="{html.escape(wrapper_css, quote=True)}"' if strict_mode else ""
     wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
     content_class_attr = f' class="{content_class}"' if not strict_mode else ""
-    style_block = (
-        ""
-        if strict_mode
-        else "<style>"
-        f"body{{{body_css}}}"
-        f".{wrapper_class}{{{wrapper_css}}}"
-        f"{extra_css}"
-        "</style>"
-    )
+    if strict_mode:
+        style_block = ""
+    else:
+        body_rule = f"body{{{body_css}}}" if body_css else ""
+        style_block = (
+            "<style>"
+            f"{body_rule}"
+            f".{wrapper_class}{{{wrapper_css}}}"
+            f"{extra_css}"
+            "</style>"
+        )
     head_html = (
         "<!doctype html>"
         f"<html lang=\"{html.escape(lang, quote=True)}\">"

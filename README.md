@@ -40,6 +40,7 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--max-nesting-jitter`: Apply random +/- jitter to the max nesting depth per variant.
 - `--no-font-css`: Disable typography-related CSS (font family, sizes, spacing, and line height).
 - `--no-font-features`: Disable advanced font features (variation settings, optical sizing, kerning, and stretch).
+- `--no-body-styles`: Disable body-level styling rules (removes body background, colors, and inline body style output).
 - Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses super strict rendering rules and quoted-printable encoding in `.html` files).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 

@@ -39,6 +39,7 @@ class Opt:
     enable_noise_divs: bool = True
     enable_wrapper_nesting: bool = True
     enable_layout_randomization: bool = True
+    enable_body_styles: bool = True
 
 
 @dataclass
