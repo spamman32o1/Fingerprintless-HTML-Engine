@@ -125,6 +125,7 @@ def random_css(
     *,
     allow_dark_mode: bool = True,
     enable_css_randomization: bool = True,
+    enable_font_css: bool = True,
     enable_font_randomization: bool = True,
     enable_gradients: bool = True,
     enable_noise_textures: bool = True,
@@ -137,6 +138,8 @@ def random_css(
         enable_gradients = False
         enable_noise_textures = False
         enable_color_palette_randomization = False
+    if not enable_font_css:
+        enable_font_randomization = False
 
     def _pick_color(palette: list[str]) -> str:
         if not palette:
@@ -145,16 +148,19 @@ def random_css(
             return palette[0]
         return pick(rng, palette)
 
-    base_pool = (
-        pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
-        if enable_font_randomization
-        else "sans"
-    )
-    base_font, base_is_variable = (
-        _build_font_stack(rng, base_pool)
-        if enable_font_randomization
-        else (", ".join(FONT_FALLBACKS["sans"]), False)
-    )
+    base_font = ""
+    base_is_variable = False
+    if enable_font_css:
+        base_pool = (
+            pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
+            if enable_font_randomization
+            else "sans"
+        )
+        base_font, base_is_variable = (
+            _build_font_stack(rng, base_pool)
+            if enable_font_randomization
+            else (", ".join(FONT_FALLBACKS["sans"]), False)
+        )
     heading_font = None
     quote_font = None
     code_font = None
@@ -174,40 +180,45 @@ def random_css(
     quote_pool_choices = ["serif", "cursive", "cjk", "sans", "humanist", "handwriting"]
     code_pool_choices = ["mono", "mono", "mono", "humanist", "sans"]
 
-    if enable_font_randomization and maybe(rng, 0.55):
+    if enable_font_css and enable_font_randomization and maybe(rng, 0.55):
         heading_font, heading_is_variable = _build_font_stack(
             rng, pick(rng, heading_pool_choices)
         )
-    if enable_font_randomization and maybe(rng, 0.38):
+    if enable_font_css and enable_font_randomization and maybe(rng, 0.38):
         quote_font, quote_is_variable = _build_font_stack(
             rng, pick(rng, quote_pool_choices)
         )
-    if enable_font_randomization and maybe(rng, 0.50):
+    if enable_font_css and enable_font_randomization and maybe(rng, 0.50):
         code_font, code_is_variable = _build_font_stack(rng, pick(rng, code_pool_choices))
 
-    font_size = (
-        rfloat(rng, 11.5, 20.5, 2)
-        if maybe(rng, 0.12)
-        else rfloat(rng, 13.2, 17.4, 2)
-    )
-    if output_mode in {"default", "strict", "super_strict", "libero"}:
-        line_height = rfloat(rng, 1.10, 1.50, 3)
-    else:
-        line_height = (
-            rfloat(rng, 1.05, 2.10, 3)
-            if maybe(rng, 0.14)
-            else rfloat(rng, 1.22, 1.78, 3)
+    font_size = None
+    line_height = None
+    letter_spacing = None
+    word_spacing = None
+    if enable_font_css:
+        font_size = (
+            rfloat(rng, 11.5, 20.5, 2)
+            if maybe(rng, 0.12)
+            else rfloat(rng, 13.2, 17.4, 2)
         )
-    letter_spacing = (
-        rfloat(rng, -0.060, 0.080, 4)
-        if maybe(rng, 0.16)
-        else rfloat(rng, -0.024, 0.048, 4)
-    )
-    word_spacing = (
-        rfloat(rng, -0.080, 0.300, 4)
-        if maybe(rng, 0.16)
-        else rfloat(rng, -0.030, 0.180, 4)
-    )
+        if output_mode in {"default", "strict", "super_strict", "libero"}:
+            line_height = rfloat(rng, 1.10, 1.50, 3)
+        else:
+            line_height = (
+                rfloat(rng, 1.05, 2.10, 3)
+                if maybe(rng, 0.14)
+                else rfloat(rng, 1.22, 1.78, 3)
+            )
+        letter_spacing = (
+            rfloat(rng, -0.060, 0.080, 4)
+            if maybe(rng, 0.16)
+            else rfloat(rng, -0.024, 0.048, 4)
+        )
+        word_spacing = (
+            rfloat(rng, -0.080, 0.300, 4)
+            if maybe(rng, 0.16)
+            else rfloat(rng, -0.030, 0.180, 4)
+        )
 
     max_w = rfloat(rng, 640.0, 920.0, 2)
     pad = rfloat(rng, 8.0, 24.0, 2)
@@ -344,52 +355,57 @@ def random_css(
         "margin: 0;",
         f"background-color: {'var(--bg)' if use_bg_var else bg_color};",
         f"color: {text_color};",
-        f"font-family: {base_font};",
-        f"font-size: {font_size}px;",
-        f"line-height: {line_height};",
-        f"letter-spacing: {letter_spacing}em;",
-        f"word-spacing: {word_spacing}em;",
         f"opacity: {opacity};",
     ]
     if use_css_vars:
         body_rules.append(f"--accent: {accent_var};")
         body_rules.append(f"--bg: {bg_var};")
-    if maybe(rng, 0.36):
-        if base_is_variable and maybe(rng, 0.55):
-            low = rng.randint(380, 520)
-            high = rng.randint(low + 40, min(650, low + 160))
-            body_rules.append(f"font-weight:{low} {high};")
-        else:
-            body_rules.append(f"font-weight:{rng.randint(380, 620)};")
-    if maybe(rng, 0.26):
-        if maybe(rng, 0.45):
-            body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
-        else:
-            body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
-    if maybe(rng, 0.18):
-        body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
-    if maybe(rng, 0.20):
-        feature_value = pick(
-            rng,
-            ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
+    if enable_font_css:
+        body_rules.extend(
+            [
+                f"font-family: {base_font};",
+                f"font-size: {font_size}px;",
+                f"line-height: {line_height};",
+                f"letter-spacing: {letter_spacing}em;",
+                f"word-spacing: {word_spacing}em;",
+            ]
         )
-        body_rules.append(f"font-feature-settings:{feature_value};")
-    if maybe(rng, 0.20):
-        body_rules.append(
-            f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
+        if maybe(rng, 0.36):
+            if base_is_variable and maybe(rng, 0.55):
+                low = rng.randint(380, 520)
+                high = rng.randint(low + 40, min(650, low + 160))
+                body_rules.append(f"font-weight:{low} {high};")
+            else:
+                body_rules.append(f"font-weight:{rng.randint(380, 620)};")
+        if maybe(rng, 0.26):
+            if maybe(rng, 0.45):
+                body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
+            else:
+                body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
+        if maybe(rng, 0.18):
+            body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
+        if maybe(rng, 0.20):
+            feature_value = pick(
+                rng,
+                ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
+            )
+            body_rules.append(f"font-feature-settings:{feature_value};")
+        if maybe(rng, 0.20):
+            body_rules.append(
+                f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
+            )
+        if maybe(rng, 0.14):
+            body_rules.append(
+                f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
+            )
+        if maybe(rng, 0.14):
+            body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
+        body_rules.extend(
+            _maybe_font_details(
+                rng,
+                allow_variations=base_is_variable,
+            )
         )
-    if maybe(rng, 0.14):
-        body_rules.append(
-            f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
-        )
-    if maybe(rng, 0.14):
-        body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
-    body_rules.extend(
-        _maybe_font_details(
-            rng,
-            allow_variations=base_is_variable,
-        )
-    )
 
     if body_background_images and not super_strict:
         body_rules.append(f"background-image: {', '.join(body_background_images)};")
@@ -516,7 +532,7 @@ def random_css(
     heading_inline: tuple[tuple[str, str], ...] | None = None
     quote_inline: tuple[tuple[str, str], ...] | None = None
     code_inline: tuple[tuple[str, str], ...] | None = None
-    if heading_font:
+    if enable_font_css and heading_font:
         heading_style: list[str] = [f"font-family:{heading_font};"]
         if maybe(rng, 0.60):
             if heading_is_variable and maybe(rng, 0.55):
@@ -538,7 +554,7 @@ def random_css(
         heading_style_text = "".join(heading_style)
         extra_rules.append("h1,h2,h3,h4,h5,h6{" + heading_style_text + "}")
         heading_inline = _rules_to_inline(heading_style_text)
-    if quote_font:
+    if enable_font_css and quote_font:
         quote_style: list[str] = [f"font-family:{quote_font};"]
         if maybe(rng, 0.50):
             if quote_is_variable and maybe(rng, 0.55):
@@ -560,7 +576,7 @@ def random_css(
         quote_style_text = "".join(quote_style)
         extra_rules.append("blockquote{" + quote_style_text + "}")
         quote_inline = _rules_to_inline(quote_style_text)
-    if code_font:
+    if enable_font_css and code_font:
         code_style: list[str] = [f"font-family:{code_font};"]
         if maybe(rng, 0.44):
             if code_is_variable and maybe(rng, 0.50):
