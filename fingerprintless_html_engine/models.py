@@ -26,6 +26,7 @@ class Opt:
     output_mode: str = "default"
     allow_dark_mode: bool = True
     enable_css_randomization: bool = True
+    enable_font_css: bool = True
     enable_font_randomization: bool = True
     enable_gradients: bool = True
     enable_noise_textures: bool = True
