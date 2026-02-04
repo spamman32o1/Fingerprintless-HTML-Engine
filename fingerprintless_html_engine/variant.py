@@ -40,6 +40,11 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         structure_randomize=opt.structure_randomize,
         output_mode=opt.output_mode,
         allow_dark_mode=opt.allow_dark_mode,
+        enable_css_randomization=opt.enable_css_randomization,
+        enable_font_randomization=opt.enable_font_randomization,
+        enable_gradients=opt.enable_gradients,
+        enable_noise_textures=opt.enable_noise_textures,
+        enable_color_palette_randomization=opt.enable_color_palette_randomization,
     )
 
 
@@ -67,6 +72,11 @@ def build_variant(
         rng,
         opt.output_mode,
         allow_dark_mode=opt.allow_dark_mode,
+        enable_css_randomization=opt.enable_css_randomization,
+        enable_font_randomization=opt.enable_font_randomization,
+        enable_gradients=opt.enable_gradients,
+        enable_noise_textures=opt.enable_noise_textures,
+        enable_color_palette_randomization=opt.enable_color_palette_randomization,
     )
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"

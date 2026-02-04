@@ -50,6 +50,36 @@ def main() -> None:
         dest="allow_dark_mode",
         help="Disable dark theme styling.",
     )
+    parser.add_argument(
+        "--no-css-randomization",
+        action="store_false",
+        dest="enable_css_randomization",
+        help="Disable randomized CSS styling (forces neutral defaults for colors, fonts, gradients, and textures).",
+    )
+    parser.add_argument(
+        "--no-font-randomization",
+        action="store_false",
+        dest="enable_font_randomization",
+        help="Disable randomized font stack selection.",
+    )
+    parser.add_argument(
+        "--no-gradients",
+        action="store_false",
+        dest="enable_gradients",
+        help="Disable gradient background selection.",
+    )
+    parser.add_argument(
+        "--no-noise-textures",
+        action="store_false",
+        dest="enable_noise_textures",
+        help="Disable noise texture background overlays.",
+    )
+    parser.add_argument(
+        "--no-color-palette-randomization",
+        action="store_false",
+        dest="enable_color_palette_randomization",
+        help="Disable randomized color palette selection (uses neutral defaults).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -114,6 +144,11 @@ def main() -> None:
         max_nesting_jitter=max(0, args.max_nesting_jitter),
         output_mode=output_mode,
         allow_dark_mode=args.allow_dark_mode,
+        enable_css_randomization=args.enable_css_randomization,
+        enable_font_randomization=args.enable_font_randomization,
+        enable_gradients=args.enable_gradients,
+        enable_noise_textures=args.enable_noise_textures,
+        enable_color_palette_randomization=args.enable_color_palette_randomization,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"
