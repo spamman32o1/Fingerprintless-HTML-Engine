@@ -12,6 +12,8 @@ class Opt:
     chunk_len_max: int = 6
 
     per_word_rate: float = 0.0033
+    enable_wrap_chunk_rate: bool = True
+    enable_per_word_rate: bool = True
 
     noise_divs_max: int = 4
     max_nesting: int = 4
@@ -28,6 +30,8 @@ class Opt:
     enable_gradients: bool = True
     enable_noise_textures: bool = True
     enable_color_palette_randomization: bool = True
+    enable_span_wrapping: bool = True
+    enable_alt_text_randomization: bool = True
 
 
 @dataclass

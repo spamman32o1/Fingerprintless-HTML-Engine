@@ -80,6 +80,18 @@ def main() -> None:
         dest="enable_color_palette_randomization",
         help="Disable randomized color palette selection (uses neutral defaults).",
     )
+    parser.add_argument(
+        "--no-span-wrap",
+        action="store_false",
+        dest="enable_span_wrapping",
+        help="Disable span wrapping in text nodes.",
+    )
+    parser.add_argument(
+        "--no-alt-randomization",
+        action="store_false",
+        dest="enable_alt_text_randomization",
+        help="Disable randomized alt text updates on images.",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     args = parser.parse_args()
 
@@ -149,6 +161,8 @@ def main() -> None:
         enable_gradients=args.enable_gradients,
         enable_noise_textures=args.enable_noise_textures,
         enable_color_palette_randomization=args.enable_color_palette_randomization,
+        enable_span_wrapping=args.enable_span_wrapping,
+        enable_alt_text_randomization=args.enable_alt_text_randomization,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"
