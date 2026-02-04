@@ -139,7 +139,10 @@ def wrap_text_node_chunked(
         return text
     allow_inline_block = not in_table_list
 
-    if maybe(rng, opt.per_word_rate):
+    per_word_rate = opt.per_word_rate if opt.enable_per_word_rate else 0.0
+    wrap_chunk_rate = opt.wrap_chunk_rate if opt.enable_wrap_chunk_rate else 0.0
+
+    if maybe(rng, per_word_rate):
         chunks = re.split(r"(\s+)", text)
         out: List[str] = []
         for ch in chunks:
@@ -178,7 +181,7 @@ def wrap_text_node_chunked(
             continue
 
         if kind == "entity":
-            if maybe(rng, opt.wrap_chunk_rate * 0.30):
+            if maybe(rng, wrap_chunk_rate * 0.30):
                 out.append(
                     f'<span style="{letter_style(rng, allow_inline_block=allow_inline_block)}">'
                     f"{val}</span>"
@@ -191,7 +194,7 @@ def wrap_text_node_chunked(
         # char
         c = val
         is_punct = bool(re.match(r"[\.\,\!\?\:\;\-\—\(\)\[\]\{\}\'\"]", c))
-        start_p = opt.wrap_chunk_rate * (0.35 if is_punct else 1.0)
+        start_p = wrap_chunk_rate * (0.35 if is_punct else 1.0)
 
         if maybe(rng, start_p):
             L = rint(rng, opt.chunk_len_min, opt.chunk_len_max)
@@ -228,6 +231,7 @@ def span_wrap_html(
 ) -> str:
     if synonym_patterns is None:
         synonym_patterns = []
+    wrap_spans = wrap_spans and opt.enable_span_wrapping
     parts = TAG_SPLIT_RE.split(html_in)
     out: List[str] = []
 
@@ -316,7 +320,10 @@ def span_wrap_html(
                     rest = rest.rstrip().rstrip("/")
                     attrs = _parse_tag_attrs(rest.strip())
                     if attrs or not rest.strip():
-                        if any(attr_name.lower() == "alt" for attr_name, _, _ in attrs):
+                        if (
+                            opt.enable_alt_text_randomization
+                            and any(attr_name.lower() == "alt" for attr_name, _, _ in attrs)
+                        ):
                             # Alt text is intentionally randomized to reduce fingerprinting surface.
                             styled_tag = _update_attr_value(styled_tag, "alt", _random_alt_text(rng))
                         has_width = any(attr_name.lower() == "width" for attr_name, _, _ in attrs)

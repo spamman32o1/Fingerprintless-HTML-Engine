@@ -32,6 +32,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         chunk_len_min=chunk_len_min,
         chunk_len_max=chunk_len_max,
         per_word_rate=_clamp_rate(opt.per_word_rate * word_factor),
+        enable_wrap_chunk_rate=opt.enable_wrap_chunk_rate,
+        enable_per_word_rate=opt.enable_per_word_rate,
         noise_divs_max=noise_divs_max,
         max_nesting=max_nesting,
         max_nesting_jitter=opt.max_nesting_jitter,
@@ -45,6 +47,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_gradients=opt.enable_gradients,
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
+        enable_span_wrapping=opt.enable_span_wrapping,
+        enable_alt_text_randomization=opt.enable_alt_text_randomization,
     )
 
 
@@ -89,7 +93,7 @@ def build_variant(
         opt,
         synonym_patterns,
         inline_styles=inline_styles if opt.output_mode == "strict" else None,
-        wrap_spans=not strict_mode,
+        wrap_spans=not strict_mode and opt.enable_span_wrapping,
     )
     jsonld_scripts = "" if super_strict else build_fake_jsonld_scripts(rng)
 
