@@ -1,4 +1,4 @@
-from fingerprintless_html_engine.html_utils import encode_quoted_printable_html
+from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, minify_output_html
 
 
 def test_encode_quoted_printable_html_wraps_and_preserves_crlf() -> None:
@@ -34,3 +34,28 @@ def test_encode_quoted_printable_html_can_skip_headers() -> None:
     assert "Content-Transfer-Encoding" not in encoded
     assert "Content-Type" not in encoded
     assert "\r\n\r\n" not in encoded
+
+
+def test_minify_output_html_pretty_output_formats_blocks() -> None:
+    html_text = (
+        "<!doctype html><html><head><title>Hi</title></head><body>"
+        "<div><p>Hello <strong>World</strong> <a href=\"#\">Link</a></p>"
+        "<p>Next</p></div></body></html>"
+    )
+
+    formatted = minify_output_html(html_text, pretty_output=True)
+
+    assert formatted == (
+        "<!doctype html>\n"
+        "<html>\n"
+        "    <head>\n"
+        "        <title>Hi</title>\n"
+        "    </head>\n"
+        "    <body>\n"
+        "        <div>\n"
+        "            <p>Hello <strong>World</strong> <a href=\"#\">Link</a></p>\n"
+        "            <p>Next</p>\n"
+        "        </div>\n"
+        "    </body>\n"
+        "</html>"
+    )
