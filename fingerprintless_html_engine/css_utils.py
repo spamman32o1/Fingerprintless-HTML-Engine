@@ -124,11 +124,37 @@ def random_css(
     output_mode: str = "default",
     *,
     allow_dark_mode: bool = True,
+    enable_css_randomization: bool = True,
+    enable_font_randomization: bool = True,
+    enable_gradients: bool = True,
+    enable_noise_textures: bool = True,
+    enable_color_palette_randomization: bool = True,
 ) -> tuple[str, str, str, InlineStyleRules]:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
-    base_pool = pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
-    base_font, base_is_variable = _build_font_stack(rng, base_pool)
+    if not enable_css_randomization:
+        enable_font_randomization = False
+        enable_gradients = False
+        enable_noise_textures = False
+        enable_color_palette_randomization = False
+
+    def _pick_color(palette: list[str]) -> str:
+        if not palette:
+            return "#111827"
+        if not enable_color_palette_randomization:
+            return palette[0]
+        return pick(rng, palette)
+
+    base_pool = (
+        pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
+        if enable_font_randomization
+        else "sans"
+    )
+    base_font, base_is_variable = (
+        _build_font_stack(rng, base_pool)
+        if enable_font_randomization
+        else (", ".join(FONT_FALLBACKS["sans"]), False)
+    )
     heading_font = None
     quote_font = None
     code_font = None
@@ -148,15 +174,15 @@ def random_css(
     quote_pool_choices = ["serif", "cursive", "cjk", "sans", "humanist", "handwriting"]
     code_pool_choices = ["mono", "mono", "mono", "humanist", "sans"]
 
-    if maybe(rng, 0.55):
+    if enable_font_randomization and maybe(rng, 0.55):
         heading_font, heading_is_variable = _build_font_stack(
             rng, pick(rng, heading_pool_choices)
         )
-    if maybe(rng, 0.38):
+    if enable_font_randomization and maybe(rng, 0.38):
         quote_font, quote_is_variable = _build_font_stack(
             rng, pick(rng, quote_pool_choices)
         )
-    if maybe(rng, 0.50):
+    if enable_font_randomization and maybe(rng, 0.50):
         code_font, code_is_variable = _build_font_stack(rng, pick(rng, code_pool_choices))
 
     font_size = (
@@ -187,7 +213,9 @@ def random_css(
     pad = rfloat(rng, 8.0, 24.0, 2)
     margin_top = rfloat(rng, 6.0, 22.0, 2)
 
-    dark_theme = maybe(rng, 0.24) if allow_dark_mode else False
+    dark_theme = (
+        maybe(rng, 0.24) if allow_dark_mode and enable_color_palette_randomization else False
+    )
     text_palette = TEXT_COLORS if not dark_theme else [
         "#e5e7eb",
         "#f3f4f6",
@@ -204,8 +232,8 @@ def random_css(
     ]
 
     opacity = 1.0 if super_strict else (rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0)
-    text_color = pick(rng, text_palette)
-    bg_color = pick(rng, bg_palette)
+    text_color = _pick_color(text_palette)
+    bg_color = _pick_color(bg_palette)
 
     body_background_images: list[str] = []
     gradient_options = []
@@ -231,7 +259,7 @@ def random_css(
     ]
     if dark_theme:
         gradient_options = dark_gradients
-    if not super_strict and maybe(rng, 0.38 if dark_theme else 0.30):
+    if enable_gradients and not super_strict and maybe(rng, 0.38 if dark_theme else 0.30):
         for _ in range(1 + (1 if maybe(rng, 0.25) else 0)):
             g_type, c1, c2, angle = pick(rng, gradient_options)
             if g_type == "linear":
@@ -281,7 +309,7 @@ def random_css(
     if not super_strict and maybe(rng, 0.22):
         overlays = rng.sample(pattern_overlays, rng.randint(1, 2))
         body_background_images.extend(overlays)
-    if not super_strict and maybe(rng, 0.18):
+    if enable_noise_textures and not super_strict and maybe(rng, 0.18):
         body_background_images.append(pick(rng, noise_textures))
 
     use_css_vars = maybe(rng, 0.32)
@@ -306,8 +334,8 @@ def random_css(
     ]
     if dark_theme:
         accent_candidates.extend(["#93c5fd", "#7dd3fc", "#f472b6", "#f59e0b", "#22c55e", "#c7d2fe"])
-    accent_var = pick(rng, accent_candidates)
-    bg_var = pick(rng, bg_palette)
+    accent_var = _pick_color(accent_candidates)
+    bg_var = _pick_color(bg_palette)
 
     use_bg_var = use_css_vars and maybe(rng, 0.55)
     use_accent_var = use_css_vars and maybe(rng, 0.55)
@@ -585,9 +613,21 @@ def random_css(
         "underline wavy",
     ]
 
-    link_color = "var(--accent)" if use_accent_var and maybe(rng, 0.55) else pick(rng, accent_palette)
-    hover_color = "var(--accent)" if use_accent_var and maybe(rng, 0.45) else pick(rng, accent_palette)
-    active_color = "var(--accent)" if use_accent_var and maybe(rng, 0.35) else pick(rng, accent_palette)
+    link_color = (
+        "var(--accent)"
+        if use_accent_var and maybe(rng, 0.55)
+        else _pick_color(accent_palette)
+    )
+    hover_color = (
+        "var(--accent)"
+        if use_accent_var and maybe(rng, 0.45)
+        else _pick_color(accent_palette)
+    )
+    active_color = (
+        "var(--accent)"
+        if use_accent_var and maybe(rng, 0.35)
+        else _pick_color(accent_palette)
+    )
     underline = pick(rng, underline_styles)
     underline_thickness = rfloat(rng, 1.0, 2.4, 2)
     underline_offset = rfloat(rng, 1.5, 3.4, 2)
@@ -646,7 +686,7 @@ def random_css(
     if maybe(rng, 0.30):
         extra_rules.append(
             "ul li::marker, ol li::marker{"
-            + f"color:{pick(rng, accent_palette)};"
+            + f"color:{_pick_color(accent_palette)};"
             + (f"font-size:{rfloat(rng, 1.0, 1.2, 2)}em;" if maybe(rng, 0.32) else "")
             + "}"
         )
@@ -677,15 +717,19 @@ def random_css(
     if maybe(rng, 0.28):
         caption_style_text = (
             f"caption-side:{pick(rng, ['top', 'bottom'])};"
-            f"color:{pick(rng, accent_palette)};"
+            f"color:{_pick_color(accent_palette)};"
             f"font-style:{pick(rng, ['normal', 'italic'])};"
             "padding:6px;"
         )
         extra_rules.append("table caption{" + caption_style_text + "}")
         caption_inline = _rules_to_inline(caption_style_text)
 
-    button_bg = "var(--accent)" if use_accent_var and maybe(rng, 0.40) else pick(rng, accent_palette)
-    button_fg = pick(rng, [text_color, "#ffffff", "#111827"])
+    button_bg = (
+        "var(--accent)"
+        if use_accent_var and maybe(rng, 0.40)
+        else _pick_color(accent_palette)
+    )
+    button_fg = _pick_color([text_color, "#ffffff", "#111827"])
     button_border = pick(
         rng,
         [
@@ -732,7 +776,7 @@ def random_css(
         )
     extra_rules.append(button_rule)
 
-    button_hover = [f"background:{pick(rng, accent_palette)};"]
+    button_hover = [f"background:{_pick_color(accent_palette)};"]
     if maybe(rng, 0.40):
         button_hover.append("transform:translateY(-1px);")
     if maybe(rng, 0.38):
@@ -754,7 +798,7 @@ def random_css(
         + "".join(button_hover)
         + "}"
     )
-    button_active = [f"background:{pick(rng, accent_palette)};"]
+    button_active = [f"background:{_pick_color(accent_palette)};"]
     if maybe(rng, 0.44):
         button_active.append("transform:translateY(0px) scale(0.99);")
     if maybe(rng, 0.30):
@@ -765,7 +809,7 @@ def random_css(
         + "}"
     )
 
-    inline_accent_color = pick(rng, accent_palette)
+    inline_accent_color = _pick_color(accent_palette)
     small_style_text = (
         f"color:{inline_accent_color};"
         + (f"font-weight:{pick(rng, ['500', '600'])};" if maybe(rng, 0.40) else "")
@@ -774,7 +818,7 @@ def random_css(
     extra_rules.append("small,sub,sup{" + small_style_text + "}")
     mark_style_text = (
         f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
-        f"color:{pick(rng, [text_color, '#111827'])};"
+        f"color:{_pick_color([text_color, '#111827'])};"
         "padding:0 2px;"
     )
     mark_rule = "mark{" + mark_style_text
@@ -791,7 +835,7 @@ def random_css(
     extra_rules.append("abbr{" + abbr_style_text + "}")
     cite_inline: tuple[tuple[str, str], ...] | None = None
     if maybe(rng, 0.26):
-        cite_style_text = f"color:{pick(rng, accent_palette)};" "font-style:italic;"
+        cite_style_text = f"color:{_pick_color(accent_palette)};" "font-style:italic;"
         extra_rules.append("cite,em{" + cite_style_text + "}")
         cite_inline = _rules_to_inline(cite_style_text)
 

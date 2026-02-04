@@ -23,6 +23,11 @@ class Opt:
     # "default", "strict", "super_strict", or "libero"
     output_mode: str = "default"
     allow_dark_mode: bool = True
+    enable_css_randomization: bool = True
+    enable_font_randomization: bool = True
+    enable_gradients: bool = True
+    enable_noise_textures: bool = True
+    enable_color_palette_randomization: bool = True
 
 
 @dataclass
