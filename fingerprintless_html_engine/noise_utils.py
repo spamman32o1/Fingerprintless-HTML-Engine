@@ -93,7 +93,10 @@ def noise_divs(
     allow_inline: bool = True,
     allow_block: bool = True,
     allow_animations: bool = False,
+    enabled: bool = True,
 ) -> str:
+    if not enabled:
+        return ""
     n = rint(rng, 0, max(0, nmax))
     bits = []
 
@@ -730,7 +733,9 @@ def _build_meta_tag(rng: random.Random, attr_name: str, name: str, content: str)
     return f"<meta{prefix_space}{attr_block}{closing_pad}{closing}"
 
 
-def meta_noise(rng: random.Random) -> str:
+def meta_noise(rng: random.Random, enabled: bool = True) -> str:
+    if not enabled:
+        return ""
     n = rint(rng, 3, 9)
     tags: list[str] = []
     seen_names: set[tuple[str, str]] = set()
