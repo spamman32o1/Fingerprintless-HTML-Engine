@@ -69,6 +69,12 @@ def main() -> None:
         help="Disable typography-related CSS (font family, sizes, spacing, and line height).",
     )
     parser.add_argument(
+        "--no-font-features",
+        action="store_false",
+        dest="enable_font_features",
+        help="Disable advanced font features (variation settings, optical sizing, kerning, and stretch).",
+    )
+    parser.add_argument(
         "--no-gradients",
         action="store_false",
         dest="enable_gradients",
@@ -195,6 +201,7 @@ def main() -> None:
         enable_css_randomization=args.enable_css_randomization,
         enable_font_css=args.enable_font_css,
         enable_font_randomization=args.enable_font_randomization,
+        enable_font_features=args.enable_font_features,
         enable_gradients=args.enable_gradients,
         enable_noise_textures=args.enable_noise_textures,
         enable_color_palette_randomization=args.enable_color_palette_randomization,

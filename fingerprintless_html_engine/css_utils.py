@@ -127,6 +127,7 @@ def random_css(
     enable_css_randomization: bool = True,
     enable_font_css: bool = True,
     enable_font_randomization: bool = True,
+    enable_font_features: bool = True,
     enable_gradients: bool = True,
     enable_noise_textures: bool = True,
     enable_color_palette_randomization: bool = True,
@@ -140,6 +141,7 @@ def random_css(
         enable_color_palette_randomization = False
     if not enable_font_css:
         enable_font_randomization = False
+        enable_font_features = False
 
     def _pick_color(palette: list[str]) -> str:
         if not palette:
@@ -384,7 +386,7 @@ def random_css(
                 body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
         if maybe(rng, 0.18):
             body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
-        if maybe(rng, 0.20):
+        if enable_font_features and maybe(rng, 0.20):
             feature_value = pick(
                 rng,
                 ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
@@ -400,12 +402,13 @@ def random_css(
             )
         if maybe(rng, 0.14):
             body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
-        body_rules.extend(
-            _maybe_font_details(
-                rng,
-                allow_variations=base_is_variable,
+        if enable_font_features:
+            body_rules.extend(
+                _maybe_font_details(
+                    rng,
+                    allow_variations=base_is_variable,
+                )
             )
-        )
 
     if body_background_images and not super_strict:
         body_rules.append(f"background-image: {', '.join(body_background_images)};")
@@ -545,12 +548,13 @@ def random_css(
             heading_style.append(
                 f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(5, 9)}deg'])};"
             )
-        heading_style.extend(
-            _maybe_font_details(
-                rng,
-                allow_variations=heading_is_variable,
+        if enable_font_features:
+            heading_style.extend(
+                _maybe_font_details(
+                    rng,
+                    allow_variations=heading_is_variable,
+                )
             )
-        )
         heading_style_text = "".join(heading_style)
         extra_rules.append("h1,h2,h3,h4,h5,h6{" + heading_style_text + "}")
         heading_inline = _rules_to_inline(heading_style_text)
@@ -567,12 +571,13 @@ def random_css(
             quote_style.append(
                 f"font-style:{pick(rng, ['italic', f'oblique {rng.randint(4, 8)}deg', 'normal'])};"
             )
-        quote_style.extend(
-            _maybe_font_details(
-                rng,
-                allow_variations=quote_is_variable,
+        if enable_font_features:
+            quote_style.extend(
+                _maybe_font_details(
+                    rng,
+                    allow_variations=quote_is_variable,
+                )
             )
-        )
         quote_style_text = "".join(quote_style)
         extra_rules.append("blockquote{" + quote_style_text + "}")
         quote_inline = _rules_to_inline(quote_style_text)
@@ -589,12 +594,13 @@ def random_css(
             code_style.append(
                 f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(4, 7)}deg'])};"
             )
-        code_style.extend(
-            _maybe_font_details(
-                rng,
-                allow_variations=code_is_variable,
+        if enable_font_features:
+            code_style.extend(
+                _maybe_font_details(
+                    rng,
+                    allow_variations=code_is_variable,
+                )
             )
-        )
         code_style_text = "".join(code_style)
         extra_rules.append("code,pre,kbd,samp{" + code_style_text + "}")
         code_inline = _rules_to_inline(code_style_text)

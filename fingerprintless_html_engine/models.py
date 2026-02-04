@@ -28,6 +28,7 @@ class Opt:
     enable_css_randomization: bool = True
     enable_font_css: bool = True
     enable_font_randomization: bool = True
+    enable_font_features: bool = True
     enable_gradients: bool = True
     enable_noise_textures: bool = True
     enable_color_palette_randomization: bool = True
