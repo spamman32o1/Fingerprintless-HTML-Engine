@@ -40,6 +40,8 @@ class Opt:
     enable_wrapper_nesting: bool = True
     enable_layout_randomization: bool = True
     enable_body_styles: bool = True
+    disable_layout_tables: bool = False
+    disable_wrapper_styles: bool = False
 
 
 @dataclass
