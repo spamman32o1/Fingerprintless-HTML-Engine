@@ -57,6 +57,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_wrapper_nesting=opt.enable_wrapper_nesting,
         enable_layout_randomization=opt.enable_layout_randomization,
         enable_body_styles=opt.enable_body_styles,
+        disable_layout_tables=opt.disable_layout_tables,
+        disable_wrapper_styles=opt.disable_wrapper_styles,
     )
 
 
@@ -93,6 +95,8 @@ def build_variant(
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
         enable_body_styles=opt.enable_body_styles,
     )
+    if opt.disable_wrapper_styles:
+        wrapper_css = ""
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = (
@@ -169,6 +173,8 @@ def build_variant(
         allow_ie_conditional_comments=opt.ie_condition_randomize,
         enable_meta_noise=opt.enable_meta_noise,
         enable_layout_randomization=opt.enable_layout_randomization,
+        disable_layout_tables=opt.disable_layout_tables,
+        disable_wrapper_styles=opt.disable_wrapper_styles,
     )
     return minify_output_html(rendered)
 
@@ -192,13 +198,18 @@ def build_layout_template(
     allow_ie_conditional_comments: bool = True,
     enable_meta_noise: bool = True,
     enable_layout_randomization: bool = True,
+    disable_layout_tables: bool = False,
+    disable_wrapper_styles: bool = False,
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
     body_style_attr = (
         f' style="{html.escape(body_css, quote=True)}"' if strict_mode and body_css else ""
     )
-    wrapper_style_attr = f' style="{html.escape(wrapper_css, quote=True)}"' if strict_mode else ""
+    if strict_mode and not disable_wrapper_styles and wrapper_css:
+        wrapper_style_attr = f' style="{html.escape(wrapper_css, quote=True)}"'
+    else:
+        wrapper_style_attr = ""
     wrapper_class_attr = f' class="{wrapper_class}"' if not strict_mode else ""
     content_class_attr = f' class="{content_class}"' if not strict_mode else ""
     if strict_mode:
@@ -302,7 +313,9 @@ def build_layout_template(
         outer_layer_open = f"<{outer_tag}{role}>"
         outer_layer_close = f"</{outer_tag}>"
 
-    if super_strict:
+    if disable_layout_tables:
+        layout_choice = "plain"
+    elif super_strict:
         layout_choice = "outer-table-fallback"
     elif not enable_layout_randomization:
         layout_choice = "plain"

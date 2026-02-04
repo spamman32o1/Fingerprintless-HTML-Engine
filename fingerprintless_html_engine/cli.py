@@ -135,6 +135,18 @@ def main() -> None:
         help="Disable randomized layout table selection and placement.",
     )
     parser.add_argument(
+        "--no-layout-tables",
+        action="store_true",
+        dest="disable_layout_tables",
+        help="Disable layout table wrappers (forces plain layout container).",
+    )
+    parser.add_argument(
+        "--no-wrapper-styles",
+        action="store_true",
+        dest="disable_wrapper_styles",
+        help="Disable wrapper padding/margin/border/box-shadow styles.",
+    )
+    parser.add_argument(
         "--no-body-styles",
         action="store_false",
         dest="enable_body_styles",
@@ -219,6 +231,8 @@ def main() -> None:
         enable_wrapper_nesting=args.enable_wrapper_nesting,
         enable_layout_randomization=args.enable_layout_randomization,
         enable_body_styles=args.enable_body_styles,
+        disable_layout_tables=args.disable_layout_tables,
+        disable_wrapper_styles=args.disable_wrapper_styles,
     )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path_mode = "single"
