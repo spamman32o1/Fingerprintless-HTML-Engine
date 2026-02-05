@@ -2,18 +2,27 @@ from __future__ import annotations
 
 import argparse
 import random
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Iterable, List, Sequence
 
 from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
+from .synonym_discovery import (
+    HeuristicDictionaryProvider,
+    PyDictionaryProvider,
+    SpacySimilarityProvider,
+    SynonymProvider,
+    WordNetProvider,
+    generate_synonym_groups,
+)
 from .text_utils import build_synonym_patterns, parse_synonym_lines
 from .variant import build_variant, random_title
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
         "--encoding",
@@ -166,7 +175,95 @@ def main() -> None:
         default=None,
         help="Disable pretty-print output formatting (overrides Libero default).",
     )
+    parser.add_argument(
+        "--generate-synonyms",
+        action="store_true",
+        default=None,
+        dest="generate_synonyms",
+        help="Enable automatic synonym map generation.",
+    )
+    parser.add_argument(
+        "--no-generate-synonyms",
+        action="store_false",
+        default=None,
+        dest="generate_synonyms",
+        help="Disable automatic synonym map generation.",
+    )
+    parser.add_argument(
+        "--synonym-provider",
+        action="append",
+        default=[],
+        dest="synonym_providers",
+        help="Provider(s) for generated synonyms. Repeat the flag or pass comma-separated values.",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
+    return parser
+
+
+def _parse_provider_names(raw_values: Sequence[str]) -> list[str]:
+    providers: list[str] = []
+    for value in raw_values:
+        parts = [part.strip().lower() for part in value.split(",")]
+        providers.extend(part for part in parts if part)
+    return providers
+
+
+def _create_synonym_providers(provider_names: Sequence[str]) -> list[SynonymProvider]:
+    provider_factories = {
+        "wordnet": WordNetProvider,
+        "pydictionary": PyDictionaryProvider,
+        "spacy": SpacySimilarityProvider,
+        "heuristic": HeuristicDictionaryProvider,
+    }
+    providers: list[SynonymProvider] = []
+    for name in provider_names:
+        factory = provider_factories.get(name)
+        if factory is None:
+            raise ValueError(f"Unknown synonym provider '{name}'.")
+        providers.append(factory())
+    return providers
+
+
+def _extract_seed_terms(text_blocks: Iterable[str], limit: int = 40) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for text in text_blocks:
+        for token in re.findall(r"[A-Za-z]{4,}", text.lower()):
+            if token in seen:
+                continue
+            seen.add(token)
+            ordered.append(token)
+            if len(ordered) >= limit:
+                return ordered
+    return ordered
+
+
+def _merge_synonym_groups(*group_sets: Sequence[Sequence[str]]) -> list[list[str]]:
+    merged: list[list[str]] = []
+    seen_groups: set[frozenset[str]] = set()
+    for groups in group_sets:
+        for group in groups:
+            normalized: list[str] = []
+            seen_terms: set[str] = set()
+            for term in group:
+                token = term.strip()
+                lowered = token.lower()
+                if not token or lowered in seen_terms:
+                    continue
+                seen_terms.add(lowered)
+                normalized.append(token)
+            if len(normalized) < 2:
+                continue
+            key = frozenset(term.lower() for term in normalized)
+            if key in seen_groups:
+                continue
+            seen_groups.add(key)
+            merged.append(normalized)
+    return merged
+
+
+def main() -> None:
+    parser = _build_parser()
     args = parser.parse_args()
 
     input_paths = _collect_input_files()
@@ -174,6 +271,15 @@ def main() -> None:
     input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
     count = prompt_int("How many variants? ", lo=1)
+
+    generate_synonyms = args.generate_synonyms
+    if generate_synonyms is None:
+        generate_synonyms = _prompt_yes_no("Generate synonym map automatically? y/n (default n): ", default=False)
+
+    provider_names = _parse_provider_names(args.synonym_providers)
+    synonym_providers: list[SynonymProvider] | None = None
+    if provider_names:
+        synonym_providers = _create_synonym_providers(provider_names)
 
     synonym_lines: List[str] = []
     synonym_path = ""
@@ -196,8 +302,26 @@ def main() -> None:
             break
         synonym_lines = [line.strip() for line in raw_synonyms.splitlines() if line.strip()]
         break
-    synonym_groups = parse_synonym_lines(synonym_lines)
+    file_synonym_groups = parse_synonym_lines(synonym_lines)
+
+    generated_synonym_groups: list[list[str]] = []
+    if generate_synonyms:
+        seed_blocks = [read_text_with_fallback(path, input_encoding) for path in input_paths]
+        seed_terms = _extract_seed_terms(seed_blocks)
+        generated_synonym_groups = generate_synonym_groups(seed_terms, enabled_providers=synonym_providers)
+
+    synonym_groups = _merge_synonym_groups(file_synonym_groups, generated_synonym_groups)
     synonym_patterns = build_synonym_patterns(synonym_groups)
+
+    if file_synonym_groups and generated_synonym_groups:
+        source_summary = "file+generated"
+    elif generated_synonym_groups:
+        source_summary = "generated"
+    elif file_synonym_groups:
+        source_summary = "file"
+    else:
+        source_summary = "none"
+    print(f"Synonym source: {source_summary} ({len(synonym_groups)} groups)")
 
     base_max_nesting = args.max_nesting
     if base_max_nesting is None:
