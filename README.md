@@ -28,6 +28,8 @@ Turn a single HTML file into multiple **stealthy**, **high-fidelity**, and **nat
 3. Choose how many variants to generate.
 4. (Optional) Supply a synonym map file with `wordA | wordB | wordC` lines.
 
+When generated synonyms are enabled, the engine writes a reusable map file (default `generated_synonym_map.txt`) into the output variant folder unless explicitly disabled.
+
 The script outputs a timestamped `variants_YYYYMMDD_HHMMSS` directory filled with variant HTML files.
 
 ### 🧭 CLI Options
@@ -45,6 +47,8 @@ Run `./script.py --help` to see all flags. Common switches include:
 - `--no-wrapper-styles`: Disable wrapper padding/margin/border/box-shadow styling on the outer wrapper.
 - `--pretty-output` / `--no-pretty-output`: Pretty-print output HTML with newlines/indentation (defaults ON in Libero mode, OFF otherwise).
 - Libero mode prompt: You will be asked whether to enable Libero mode after selecting the variant count (Libero output uses super strict rendering rules and quoted-printable encoding in `.html` files).
+- `--write-generated-synonym-map` / `--no-write-generated-synonym-map`: Control whether generated synonym groups are exported to disk (default: enabled when synonym generation is enabled).
+- `--generated-synonym-map-filename`: Set a custom filename for the generated map export (default `generated_synonym_map.txt`).
 - Strict mode prompt: If Libero mode is not selected, you will be asked whether to enable strict mode (and optionally super strict mode).
 
 ### 📂 Multiple Inputs
