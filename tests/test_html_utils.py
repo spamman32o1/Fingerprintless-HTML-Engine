@@ -1,3 +1,6 @@
+import warnings
+
+import pytest
 from fingerprintless_html_engine import html_utils
 from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, extract_lang, minify_output_html
 
@@ -96,3 +99,19 @@ def test_extract_lang_defaults_to_en_when_detector_unavailable(monkeypatch) -> N
 
     html_text = "<html><body>Hola mundo</body></html>"
     assert extract_lang(html_text) == "en"
+
+
+def test_extract_lang_warns_once_when_lingua_missing(monkeypatch) -> None:
+    monkeypatch.setattr(html_utils, "LanguageDetectorBuilder", None)
+    monkeypatch.setattr(html_utils, "_LANGUAGE_DETECTOR", None)
+    monkeypatch.setattr(html_utils, "_LINGUA_WARNING_EMITTED", False)
+
+    html_text = "<html><body>Hola mundo</body></html>"
+
+    with pytest.warns(UserWarning, match="Optional dependency 'lingua' is not installed"):
+        assert extract_lang(html_text) == "en"
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        assert extract_lang(html_text) == "en"
+    assert not record

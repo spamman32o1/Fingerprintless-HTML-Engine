@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from collections import Counter
 
 try:
@@ -46,6 +47,7 @@ INTERTAG_WHITESPACE_RE = re.compile(
 )
 WORD_RE = re.compile(r"\b[^\W\d_]+\b", flags=re.UNICODE)
 _LANGUAGE_DETECTOR = None
+_LINGUA_WARNING_EMITTED = False
 
 
 def _collapse_intertag_whitespace(html_text: str) -> str:
@@ -70,9 +72,22 @@ def extract_lang(html_in: str) -> str:
 
 
 def _get_language_detector():
+    global _LINGUA_WARNING_EMITTED
     global _LANGUAGE_DETECTOR
-    if _LANGUAGE_DETECTOR is not None or LanguageDetectorBuilder is None:
+    if _LANGUAGE_DETECTOR is not None:
         return _LANGUAGE_DETECTOR
+
+    if LanguageDetectorBuilder is None:
+        if not _LINGUA_WARNING_EMITTED:
+            warnings.warn(
+                "Optional dependency 'lingua' is not installed. "
+                "Language auto-detection is disabled; install it with `pip install lingua-language-detector` "
+                "to improve automatic HTML language detection.",
+                UserWarning,
+                stacklevel=2,
+            )
+            _LINGUA_WARNING_EMITTED = True
+        return None
 
     _LANGUAGE_DETECTOR = LanguageDetectorBuilder.from_all_languages().build()
     return _LANGUAGE_DETECTOR
