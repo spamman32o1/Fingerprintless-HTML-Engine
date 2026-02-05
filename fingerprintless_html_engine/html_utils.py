@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
+from html import unescape
+from importlib import import_module
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE, VOID_ELEMENTS
 from .models import _HtmlNode
@@ -54,7 +57,99 @@ def extract_lang(html_in: str) -> str:
     m = HTML_LANG_RE.search(html_in)
     if m:
         return m.group(1)
+    return detect_lang_from_text(html_in)
+
+
+_LINGUA_TO_HTML_LANG = {
+    "ENGLISH": "en",
+    "EN": "en",
+    "FRENCH": "fr",
+    "FR": "fr",
+    "GERMAN": "de",
+    "DE": "de",
+    "SPANISH": "es",
+    "ES": "es",
+    "ITALIAN": "it",
+    "IT": "it",
+    "PORTUGUESE": "pt",
+    "PT": "pt",
+    "DUTCH": "nl",
+    "NL": "nl",
+}
+_WORD_RE = re.compile(r"[\w\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF']+", re.UNICODE)
+_LINGUA_DETECTOR = None
+
+
+def _normalize_lingua_language(language: object) -> str:
+    if language is None:
+        return "en"
+
+    for attr in ("iso_code_639_1", "name"):
+        code_obj = getattr(language, attr, None)
+        if code_obj is None:
+            continue
+        code_name = getattr(code_obj, "name", None)
+        if code_name and code_name.upper() in _LINGUA_TO_HTML_LANG:
+            return _LINGUA_TO_HTML_LANG[code_name.upper()]
+        if isinstance(code_obj, str) and code_obj.upper() in _LINGUA_TO_HTML_LANG:
+            return _LINGUA_TO_HTML_LANG[code_obj.upper()]
+
+    language_name = getattr(language, "name", None)
+    if language_name and language_name.upper() in _LINGUA_TO_HTML_LANG:
+        return _LINGUA_TO_HTML_LANG[language_name.upper()]
+
     return "en"
+
+
+def _get_lingua_detector() -> object | None:
+    global _LINGUA_DETECTOR
+    if _LINGUA_DETECTOR is not None:
+        return _LINGUA_DETECTOR
+
+    try:
+        lingua = import_module("lingua")
+    except ModuleNotFoundError:
+        _LINGUA_DETECTOR = False
+        return None
+
+    detector = (
+        lingua.LanguageDetectorBuilder.from_all_languages()
+        .with_preloaded_language_models()
+        .build()
+    )
+    _LINGUA_DETECTOR = detector
+    return detector
+
+
+def detect_lang_from_text(html_in: str) -> str:
+    detector = _get_lingua_detector()
+    if detector is None:
+        return "en"
+
+    cleaned = re.sub(r"(?is)<!--.*?-->", " ", html_in)
+    cleaned = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", cleaned)
+    cleaned = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", cleaned)
+    cleaned = re.sub(r"(?is)<[^>]+>", " ", cleaned)
+    cleaned = unescape(cleaned)
+
+    words = [word for word in _WORD_RE.findall(cleaned) if len(word) > 1]
+    if not words:
+        return "en"
+
+    counts: Counter[str] = Counter()
+    for word in words:
+        language = detector.detect_language_of(word)
+        mapped = _normalize_lingua_language(language)
+        if mapped != "en" or language is not None:
+            counts[mapped] += 1
+
+    if not counts:
+        return "en"
+
+    top_lang, top_count = counts.most_common(1)[0]
+    if top_count == 0:
+        return "en"
+    return top_lang
 
 
 def extract_body_content(html_in: str) -> str:

@@ -104,9 +104,17 @@ Every generated variant (except strict mode) automatically receives a **metanois
 
 This head-level noise strengthens the variants’ ability to evade fingerprinting while remaining standards-compliant and harmless to content rendering.
 
+
+### 🌐 Language Handling
+Generated variants preserve an explicit `<html lang="...">` value from your input when present.
+If the input document has no `lang` attribute on `<html>`, the engine now auto-detects a best-fit
+language from visible text (ignoring tags/scripts/styles) using Lingua and selects the majority
+language across detected words. If detection is unavailable, ambiguous, or text is empty, it safely
+fallbacks to `en`.
+
 ## 📦 Requirements
 - Python 3.10+
-- No external dependencies
+- Optional dependency for automatic language detection without `<html lang>`: `lingua-language-detector`
 
 ## 🌟 Why It Shines
 Fingerprintless HTML Engine is engineered for **aggressive uniqueness** without sacrificing **rendering fidelity**. It’s a **powerful**, **surgical**, and **battle-tested** way to introduce safe entropy into HTML.
