@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
+
+try:
+    from lingua import LanguageDetectorBuilder
+except ImportError:  # pragma: no cover - optional dependency
+    LanguageDetectorBuilder = None
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE, VOID_ELEMENTS
 from .models import _HtmlNode
@@ -38,6 +44,8 @@ INLINE_TAGS = {
 INTERTAG_WHITESPACE_RE = re.compile(
     r"(</?\s*([a-zA-Z0-9:_-]+)[^>]*>)\s+(<\s*/?\s*([a-zA-Z0-9:_-]+)[^>]*>)"
 )
+WORD_RE = re.compile(r"\b[^\W\d_]+\b", flags=re.UNICODE)
+_LANGUAGE_DETECTOR = None
 
 
 def _collapse_intertag_whitespace(html_text: str) -> str:
@@ -54,7 +62,82 @@ def extract_lang(html_in: str) -> str:
     m = HTML_LANG_RE.search(html_in)
     if m:
         return m.group(1)
+
+    detected = _detect_html_content_lang(html_in)
+    if detected:
+        return detected
     return "en"
+
+
+def _get_language_detector():
+    global _LANGUAGE_DETECTOR
+    if _LANGUAGE_DETECTOR is not None or LanguageDetectorBuilder is None:
+        return _LANGUAGE_DETECTOR
+
+    _LANGUAGE_DETECTOR = LanguageDetectorBuilder.from_all_languages().build()
+    return _LANGUAGE_DETECTOR
+
+
+def _language_to_html_code(language: object) -> str | None:
+    iso = getattr(language, "iso_code_639_1", None)
+    if iso is not None:
+        name = getattr(iso, "name", None)
+        if isinstance(name, str) and name:
+            return name.lower()
+        iso_string = str(iso)
+        if iso_string:
+            return iso_string.lower()
+
+    lang_name = getattr(language, "name", None)
+    if isinstance(lang_name, str) and lang_name:
+        return lang_name.lower()
+    return None
+
+
+def _extract_visible_text(html_in: str) -> str:
+    without_scripts = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html_in)
+    without_tags = re.sub(r"(?s)<[^>]+>", " ", without_scripts)
+    return re.sub(r"\s+", " ", without_tags).strip()
+
+
+def _detect_html_content_lang(html_in: str) -> str | None:
+    detector = _get_language_detector()
+    if detector is None:
+        return None
+
+    text = _extract_visible_text(html_in)
+    if not text:
+        return None
+
+    try:
+        detections = detector.detect_multiple_languages_of(text)
+    except Exception:  # pragma: no cover - detector robustness fallback
+        detections = None
+
+    if detections:
+        language_words: Counter[object] = Counter()
+        for detection in detections:
+            language = getattr(detection, "language", None)
+            if language is None:
+                continue
+            start = getattr(detection, "start_index", 0)
+            end = getattr(detection, "end_index", -1)
+            segment = text[start : end + 1]
+            word_count = len(WORD_RE.findall(segment))
+            if word_count:
+                language_words[language] += word_count
+
+        if language_words:
+            winner = max(language_words.items(), key=lambda item: item[1])[0]
+            code = _language_to_html_code(winner)
+            if code:
+                return code
+
+    try:
+        single = detector.detect_language_of(text)
+    except Exception:  # pragma: no cover - detector robustness fallback
+        single = None
+    return _language_to_html_code(single) if single is not None else None
 
 
 def extract_body_content(html_in: str) -> str:

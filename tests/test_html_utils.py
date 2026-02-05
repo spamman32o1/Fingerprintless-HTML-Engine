@@ -1,4 +1,5 @@
-from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, minify_output_html
+from fingerprintless_html_engine import html_utils
+from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, extract_lang, minify_output_html
 
 
 def test_encode_quoted_printable_html_wraps_and_preserves_crlf() -> None:
@@ -59,3 +60,39 @@ def test_minify_output_html_pretty_output_formats_blocks() -> None:
         "    </body>\n"
         "</html>"
     )
+
+
+def test_extract_lang_uses_detected_majority_language_when_html_lang_missing(monkeypatch) -> None:
+    class _FakeLanguage:
+        def __init__(self, code: str) -> None:
+            self.iso_code_639_1 = type("Iso", (), {"name": code.upper()})()
+
+    class _FakeDetection:
+        def __init__(self, language, start_index: int, end_index: int) -> None:
+            self.language = language
+            self.start_index = start_index
+            self.end_index = end_index
+
+    class _FakeDetector:
+        def detect_multiple_languages_of(self, text: str):
+            en = _FakeLanguage("en")
+            es = _FakeLanguage("es")
+            return [
+                _FakeDetection(en, 0, 10),
+                _FakeDetection(es, 11, 31),
+            ]
+
+        def detect_language_of(self, text: str):
+            return _FakeLanguage("en")
+
+    monkeypatch.setattr(html_utils, "_get_language_detector", lambda: _FakeDetector())
+
+    html_text = "<html><body>Hello world hola mundo adios amigo</body></html>"
+    assert extract_lang(html_text) == "es"
+
+
+def test_extract_lang_defaults_to_en_when_detector_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(html_utils, "_get_language_detector", lambda: None)
+
+    html_text = "<html><body>Hola mundo</body></html>"
+    assert extract_lang(html_text) == "en"
