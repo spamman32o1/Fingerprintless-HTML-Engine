@@ -196,6 +196,26 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="synonym_providers",
         help="Provider(s) for generated synonyms. Repeat the flag or pass comma-separated values.",
     )
+    parser.add_argument(
+        "--write-generated-synonym-map",
+        action="store_true",
+        default=None,
+        dest="write_generated_synonym_map",
+        help="Write generated synonym groups to a reusable pipe-delimited map file.",
+    )
+    parser.add_argument(
+        "--no-write-generated-synonym-map",
+        action="store_false",
+        default=None,
+        dest="write_generated_synonym_map",
+        help="Do not write generated synonym groups to disk.",
+    )
+    parser.add_argument(
+        "--generated-synonym-map-filename",
+        default="generated_synonym_map.txt",
+        dest="generated_synonym_map_filename",
+        help="Filename to use when writing the generated synonym map (default: generated_synonym_map.txt).",
+    )
     parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
     return parser
 
@@ -262,6 +282,32 @@ def _merge_synonym_groups(*group_sets: Sequence[Sequence[str]]) -> list[list[str
     return merged
 
 
+def _serialize_synonym_groups(groups: Sequence[Sequence[str]]) -> str:
+    lines = [" | ".join(term.strip() for term in group if term.strip()) for group in groups]
+    return "\n".join(line for line in lines if line)
+
+
+def _write_generated_synonym_map_files(
+    output_directories: Sequence[Path],
+    groups: Sequence[Sequence[str]],
+    *,
+    filename: str,
+) -> list[Path]:
+    normalized_filename = Path(filename).name or "generated_synonym_map.txt"
+    serialized = _serialize_synonym_groups(groups)
+    written_paths: list[Path] = []
+    seen: set[Path] = set()
+    for directory in output_directories:
+        resolved = directory.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        target = resolved / normalized_filename
+        target.write_text(f"{serialized}\n", encoding="utf-8")
+        written_paths.append(target)
+    return written_paths
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -309,6 +355,10 @@ def main() -> None:
         seed_blocks = [read_text_with_fallback(path, input_encoding) for path in input_paths]
         seed_terms = _extract_seed_terms(seed_blocks)
         generated_synonym_groups = generate_synonym_groups(seed_terms, enabled_providers=synonym_providers)
+
+    write_generated_synonym_map = args.write_generated_synonym_map
+    if write_generated_synonym_map is None:
+        write_generated_synonym_map = bool(generate_synonyms)
 
     synonym_groups = _merge_synonym_groups(file_synonym_groups, generated_synonym_groups)
     synonym_patterns = build_synonym_patterns(synonym_groups)
@@ -457,6 +507,15 @@ def main() -> None:
     else:
         for outdir in output_locations:
             print(f"\nDone. Wrote {opt.count} files to: {outdir}")
+
+    if generated_synonym_groups and write_generated_synonym_map:
+        written_map_paths = _write_generated_synonym_map_files(
+            output_locations,
+            generated_synonym_groups,
+            filename=args.generated_synonym_map_filename,
+        )
+        for path in written_map_paths:
+            print(f"Generated synonym map written to: {path}")
 
 
 __all__ = ["main"]
