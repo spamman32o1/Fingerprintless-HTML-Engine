@@ -1,5 +1,0 @@
-# Optional runtime dependency for automatic language detection.
-lingua-language-detector>=2.0.2
-
-# Test dependency.
-pytest>=7.0
