@@ -104,6 +104,16 @@ def test_prompt_output_mode_retries_until_valid_choice(monkeypatch: pytest.Monke
     assert cli._prompt_output_mode() == "super_strict"
 
 
+
+
+def test_print_startup_banner_renders_branding(capsys: pytest.CaptureFixture[str]) -> None:
+    cli._print_startup_banner()
+
+    stdout = capsys.readouterr().out
+    assert "Fingerprint-less HTML Engine" in stdout
+    assert "███████╗██╗" in stdout
+
+
 def test_main_skips_generated_map_file_when_write_flag_disabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
