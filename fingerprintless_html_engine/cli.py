@@ -43,6 +43,23 @@ def _status_text(icon: str, text: str, color: str = _Ansi.GREEN) -> str:
     return f"{_colorize(icon, _Ansi.BLUE)} {_colorize(text, color)}"
 
 
+def _print_startup_banner() -> None:
+    banner_lines = [
+        "╔══════════════════════════════════════════════════════════════╗",
+        "║  ███████╗██╗███╗   ██╗ ██████╗ ███████╗██████╗ ██████╗      ║",
+        "║  ██╔════╝██║████╗  ██║██╔════╝ ██╔════╝██╔══██╗██╔══██╗     ║",
+        "║  █████╗  ██║██╔██╗ ██║██║  ███╗█████╗  ██████╔╝██████╔╝     ║",
+        "║  ██╔══╝  ██║██║╚██╗██║██║   ██║██╔══╝  ██╔══██╗██╔══██╗     ║",
+        "║  ██║     ██║██║ ╚████║╚██████╔╝███████╗██║  ██║██║  ██║     ║",
+        "║  ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝     ║",
+        "╚══════════════════════════════════════════════════════════════╝",
+    ]
+    for line in banner_lines:
+        print(_colorize(line, _Ansi.MAGENTA))
+    print(_colorize("              ✨ Fingerprint-less HTML Engine ✨", _Ansi.CYAN))
+    print()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
@@ -351,6 +368,7 @@ def _prompt_output_mode() -> str:
 
 
 def main() -> None:
+    _print_startup_banner()
     parser = _build_parser()
     args = parser.parse_args()
 
