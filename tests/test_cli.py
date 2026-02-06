@@ -145,3 +145,35 @@ def test_main_writes_generated_map_file_when_generation_is_enabled(
 
     stdout = capsys.readouterr().out
     assert f"Generated synonym map written to: {generated_map}" in stdout
+
+
+def test_main_uses_italian_fallback_lang_in_libero_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_file = tmp_path / "input.html"
+    input_file.write_text("<html><body>Fast car</body></html>", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(cli, "_collect_input_files", lambda: [input_file])
+    monkeypatch.setattr(cli, "prompt_int", lambda *args, **kwargs: 1)
+
+    prompts = iter([False, True, False, False])
+    monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: next(prompts))
+
+    monkeypatch.setattr(cli, "read_text_with_fallback", lambda *args, **kwargs: input_file.read_text(encoding="utf-8"))
+
+    captured: dict[str, str | None] = {"fallback_lang": None}
+
+    def _fake_extract_lang(_html: str, fallback_lang: str = "en") -> str:
+        captured["fallback_lang"] = fallback_lang
+        return fallback_lang
+
+    monkeypatch.setattr(cli, "extract_lang", _fake_extract_lang)
+    monkeypatch.setattr(cli, "build_variant", lambda *args, **kwargs: "<html><body>Variant</body></html>")
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "")
+    monkeypatch.setattr("sys.argv", ["prog"])
+
+    cli.main()
+
+    assert captured["fallback_lang"] == "it"
