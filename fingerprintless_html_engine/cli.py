@@ -22,6 +22,27 @@ from .text_utils import build_synonym_patterns, parse_synonym_lines
 from .variant import build_variant, random_title
 
 
+class _Ansi:
+    RESET = "\033[0m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    MAGENTA = "\033[95m"
+
+
+def _colorize(text: str, color: str) -> str:
+    return f"{color}{text}{_Ansi.RESET}"
+
+
+def _prompt_text(icon: str, text: str) -> str:
+    return f"{_colorize(icon, _Ansi.BLUE)} {_colorize(text, _Ansi.CYAN)}"
+
+
+def _status_text(icon: str, text: str, color: str = _Ansi.GREEN) -> str:
+    return f"{_colorize(icon, _Ansi.BLUE)} {_colorize(text, color)}"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
@@ -309,13 +330,13 @@ def _write_generated_synonym_map_files(
 
 
 def _prompt_output_mode() -> str:
-    print("Select output mode:")
-    print("  1) default")
-    print("  2) strict")
-    print("  3) super strict")
-    print("  4) libero")
+    print(_status_text("🎨", "Select output mode:", _Ansi.MAGENTA))
+    print(_status_text("•", "1) default", _Ansi.CYAN))
+    print(_status_text("•", "2) strict", _Ansi.CYAN))
+    print(_status_text("•", "3) super strict", _Ansi.CYAN))
+    print(_status_text("•", "4) libero", _Ansi.CYAN))
     while True:
-        choice = input("Choose mode [1-4] (default 1): ").strip()
+        choice = input(_prompt_text("❓", "Choose mode [1-4] (default 1): ")).strip()
         if choice == "":
             return "default"
         if choice == "1":
@@ -326,7 +347,7 @@ def _prompt_output_mode() -> str:
             return "super_strict"
         if choice == "4":
             return "libero"
-        print("Please enter 1, 2, 3, or 4.")
+        print(_status_text("⚠️", "Please enter 1, 2, 3, or 4.", _Ansi.YELLOW))
 
 
 def main() -> None:
@@ -337,11 +358,14 @@ def main() -> None:
 
     input_encoding = args.encoding.strip().lower() if args.encoding else "utf-8"
 
-    count = prompt_int("How many variants? ", lo=1)
+    count = prompt_int(_prompt_text("🔢", "How many variants? "), lo=1)
 
     generate_synonyms = args.generate_synonyms
     if generate_synonyms is None:
-        generate_synonyms = _prompt_yes_no("Generate synonym map automatically? y/n (default n): ", default=False)
+        generate_synonyms = _prompt_yes_no(
+            _prompt_text("🧠", "Generate synonym map automatically? y/n (default n): "),
+            default=False,
+        )
 
     provider_names = _parse_provider_names(args.synonym_providers)
     synonym_providers: list[SynonymProvider] | None = None
@@ -353,7 +377,7 @@ def main() -> None:
     while True:
         if not synonym_path:
             synonym_path = input(
-                "Optional synonym map file path (pipe-separated synonyms per line, blank to skip): "
+                _prompt_text("📄", "Optional synonym map file path (pipe-separated synonyms per line, blank to skip): ")
             ).strip().strip('"').strip("'")
         if not synonym_path:
             break
@@ -361,8 +385,8 @@ def main() -> None:
         try:
             raw_synonyms = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
-            print(f"Could not read synonym map file '{path}': {exc}")
-            retry = input("Press Enter to skip or type a new path to retry: ").strip()
+            print(_status_text("❌", f"Could not read synonym map file '{path}': {exc}", _Ansi.YELLOW))
+            retry = input(_prompt_text("↩️", "Press Enter to skip or type a new path to retry: ")).strip()
             if retry:
                 synonym_path = retry
                 continue
@@ -392,7 +416,7 @@ def main() -> None:
         source_summary = "file"
     else:
         source_summary = "none"
-    print(f"Synonym source: {source_summary} ({len(synonym_groups)} groups)")
+    print(_status_text("ℹ️", f"Synonym source: {source_summary} ({len(synonym_groups)} groups)"))
 
     base_max_nesting = args.max_nesting
     if base_max_nesting is None:
@@ -435,7 +459,7 @@ def main() -> None:
     output_path_mode = "single"
     if len(input_paths) > 1:
         use_same = _prompt_yes_no(
-            "Multiple input files detected. Use the same output folder for all? y/n (default y): ",
+            _prompt_text("🗂️", "Multiple input files detected. Use the same output folder for all? y/n (default y): "),
             default=True,
         )
         output_path_mode = "same" if use_same else "different"
@@ -508,10 +532,15 @@ def main() -> None:
         output_locations.append(outdir.resolve())
 
     if output_path_mode == "same":
-        print(f"\nDone. Wrote {opt.count * len(input_paths)} files to: {base_outdir.resolve()}")
+        print(
+            _status_text(
+                "✅",
+                f"Done. Wrote {opt.count * len(input_paths)} files to: {base_outdir.resolve()}",
+            )
+        )
     else:
         for outdir in output_locations:
-            print(f"\nDone. Wrote {opt.count} files to: {outdir}")
+            print(_status_text("✅", f"Done. Wrote {opt.count} files to: {outdir}"))
 
     if generated_synonym_groups and write_generated_synonym_map:
         written_map_paths = _write_generated_synonym_map_files(
@@ -520,7 +549,7 @@ def main() -> None:
             filename=args.generated_synonym_map_filename,
         )
         for path in written_map_paths:
-            print(f"Generated synonym map written to: {path}")
+            print(_status_text("📝", f"Generated synonym map written to: {path}"))
 
 
 __all__ = ["main"]
