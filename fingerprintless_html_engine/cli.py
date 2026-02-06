@@ -308,6 +308,27 @@ def _write_generated_synonym_map_files(
     return written_paths
 
 
+def _prompt_output_mode() -> str:
+    print("Select output mode:")
+    print("  1) default")
+    print("  2) strict")
+    print("  3) super strict")
+    print("  4) libero")
+    while True:
+        choice = input("Choose mode [1-4] (default 1): ").strip()
+        if choice == "":
+            return "default"
+        if choice == "1":
+            return "default"
+        if choice == "2":
+            return "strict"
+        if choice == "3":
+            return "super_strict"
+        if choice == "4":
+            return "libero"
+        print("Please enter 1, 2, 3, or 4.")
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -377,27 +398,11 @@ def main() -> None:
     if base_max_nesting is None:
         base_max_nesting = Opt(count=count).max_nesting
 
-    libero_mode = _prompt_yes_no(
-        "Enable Libero mode for libero.it (writes quoted-printable strict HTML)? y/n (default n): ",
-        default=False,
-    )
-    output_mode = "libero" if libero_mode else "default"
+    output_mode = _prompt_output_mode()
+    libero_mode = output_mode == "libero"
     pretty_output = args.pretty_output
     if pretty_output is None:
         pretty_output = libero_mode
-    if not libero_mode:
-        strict_mode = _prompt_yes_no(
-            "Enable strict mode (inline styles, no style blocks)? y/n (default n): ",
-            default=False,
-        )
-        output_mode = "strict" if strict_mode else "default"
-        if strict_mode:
-            super_strict = _prompt_yes_no(
-                "Enable super strict mode for aggressive providers? y/n (default n): ",
-                default=False,
-            )
-            if super_strict:
-                output_mode = "super_strict"
 
     opt = Opt(
         count=count,
