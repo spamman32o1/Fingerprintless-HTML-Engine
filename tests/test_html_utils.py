@@ -101,6 +101,14 @@ def test_extract_lang_defaults_to_en_when_detector_unavailable(monkeypatch) -> N
     assert extract_lang(html_text) == "en"
 
 
+
+
+def test_extract_lang_uses_custom_fallback_when_detection_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(html_utils, "_get_language_detector", lambda: None)
+
+    html_text = "<html><body>Hola mundo</body></html>"
+    assert extract_lang(html_text, fallback_lang="it") == "it"
+
 def test_extract_lang_warns_once_when_lingua_missing(monkeypatch) -> None:
     monkeypatch.setattr(html_utils, "LanguageDetectorBuilder", None)
     monkeypatch.setattr(html_utils, "_LANGUAGE_DETECTOR", None)

@@ -480,7 +480,7 @@ def main() -> None:
         raw_html = read_text_with_fallback(input_path, input_encoding)
         sanitized = sanitize_input_html(raw_html)
         content = extract_body_content(sanitized)
-        lang = extract_lang(sanitized)
+        lang = extract_lang(sanitized, fallback_lang="it" if opt.output_mode == "libero" else "en")
 
         if output_path_mode == "different":
             outdir = Path(f"variants_{ts}_{input_path.stem}")

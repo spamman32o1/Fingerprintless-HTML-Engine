@@ -60,7 +60,7 @@ def _collapse_intertag_whitespace(html_text: str) -> str:
     return INTERTAG_WHITESPACE_RE.sub(_replacement, html_text)
 
 
-def extract_lang(html_in: str) -> str:
+def extract_lang(html_in: str, fallback_lang: str = "en") -> str:
     m = HTML_LANG_RE.search(html_in)
     if m:
         return m.group(1)
@@ -68,7 +68,7 @@ def extract_lang(html_in: str) -> str:
     detected = _detect_html_content_lang(html_in)
     if detected:
         return detected
-    return "en"
+    return fallback_lang
 
 
 def _get_language_detector():
