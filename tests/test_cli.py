@@ -91,6 +91,19 @@ def test_write_generated_synonym_map_files_writes_deduplicated_directories(tmp_p
     assert paths[0].read_text(encoding="utf-8") == "fast | quick\nsmall | tiny\n"
 
 
+def test_prompt_output_mode_uses_default_when_blank(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "")
+
+    assert cli._prompt_output_mode() == "default"
+
+
+def test_prompt_output_mode_retries_until_valid_choice(monkeypatch: pytest.MonkeyPatch) -> None:
+    answers = iter(["5", "3"])
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(answers))
+
+    assert cli._prompt_output_mode() == "super_strict"
+
+
 def test_main_skips_generated_map_file_when_write_flag_disabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -102,6 +115,7 @@ def test_main_skips_generated_map_file_when_write_flag_disabled(
     monkeypatch.setattr(cli, "_collect_input_files", lambda: [input_file])
     monkeypatch.setattr(cli, "prompt_int", lambda *args, **kwargs: 1)
     monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: False)
+    monkeypatch.setattr(cli, "_prompt_output_mode", lambda: "default")
     monkeypatch.setattr(cli, "read_text_with_fallback", lambda *args, **kwargs: input_file.read_text(encoding="utf-8"))
     monkeypatch.setattr(cli, "build_variant", lambda *args, **kwargs: "<html><body>Variant</body></html>")
     monkeypatch.setattr(cli, "generate_synonym_groups", lambda *args, **kwargs: [["fast", "quick"]])
@@ -130,6 +144,7 @@ def test_main_writes_generated_map_file_when_generation_is_enabled(
     monkeypatch.setattr(cli, "_collect_input_files", lambda: [input_file])
     monkeypatch.setattr(cli, "prompt_int", lambda *args, **kwargs: 1)
     monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: False)
+    monkeypatch.setattr(cli, "_prompt_output_mode", lambda: "default")
     monkeypatch.setattr(cli, "read_text_with_fallback", lambda *args, **kwargs: input_file.read_text(encoding="utf-8"))
     monkeypatch.setattr(cli, "build_variant", lambda *args, **kwargs: "<html><body>Variant</body></html>")
     monkeypatch.setattr(cli, "generate_synonym_groups", lambda *args, **kwargs: [["fast", "quick", "rapid"]])
@@ -158,8 +173,8 @@ def test_main_uses_italian_fallback_lang_in_libero_mode(
     monkeypatch.setattr(cli, "_collect_input_files", lambda: [input_file])
     monkeypatch.setattr(cli, "prompt_int", lambda *args, **kwargs: 1)
 
-    prompts = iter([False, True, False, False])
-    monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: next(prompts))
+    monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: False)
+    monkeypatch.setattr(cli, "_prompt_output_mode", lambda: "libero")
 
     monkeypatch.setattr(cli, "read_text_with_fallback", lambda *args, **kwargs: input_file.read_text(encoding="utf-8"))
 
