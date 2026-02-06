@@ -108,7 +108,7 @@ def build_variant(
         structured_html,
         opt,
         synonym_patterns,
-        inline_styles=inline_styles if opt.output_mode == "strict" else None,
+        inline_styles=inline_styles if strict_mode else None,
         wrap_spans=not strict_mode and opt.enable_span_wrapping,
     )
     jsonld_scripts = (
