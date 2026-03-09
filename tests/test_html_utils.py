@@ -2,7 +2,12 @@ import warnings
 
 import pytest
 from fingerprintless_html_engine import html_utils
-from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, extract_lang, minify_output_html
+from fingerprintless_html_engine.html_utils import (
+    encode_quoted_printable_html,
+    extract_lang,
+    minify_output_html,
+    sanitize_input_html,
+)
 
 
 def test_encode_quoted_printable_html_wraps_and_preserves_crlf() -> None:
@@ -123,3 +128,21 @@ def test_extract_lang_warns_once_when_lingua_missing(monkeypatch) -> None:
         warnings.simplefilter("always")
         assert extract_lang(html_text) == "en"
     assert not record
+
+
+def test_sanitize_input_html_removes_mso_comments_by_default() -> None:
+    html_text = '<div><!--[if mso]><table><tr><td>MSO</td></tr></table><![endif]--><p>Hello</p></div>'
+
+    sanitized = sanitize_input_html(html_text)
+
+    assert '<!--[if mso]' not in sanitized
+    assert '<p>Hello</p>' in sanitized
+
+
+def test_sanitize_input_html_preserves_mso_comments_when_requested() -> None:
+    html_text = '<div><!--[if mso]><table><tr><td>MSO</td></tr></table><![endif]--><!-- normal --><p>Hello</p></div>'
+
+    sanitized = sanitize_input_html(html_text, preserve_mso_comments=True)
+
+    assert '<!--[if mso]><table><tr><td>MSO</td></tr></table><![endif]-->' in sanitized
+    assert '<!-- normal -->' not in sanitized

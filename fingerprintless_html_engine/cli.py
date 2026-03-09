@@ -7,7 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
+from .html_utils import (
+    encode_quoted_printable_html,
+    extract_body_content,
+    extract_lang,
+    sanitize_input_html,
+)
+from .tag_utils import is_strict_output_mode
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
 from .synonym_discovery import (
@@ -525,7 +531,10 @@ def main() -> None:
 
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
-        sanitized = sanitize_input_html(raw_html)
+        sanitized = sanitize_input_html(
+            raw_html,
+            preserve_mso_comments=is_strict_output_mode(opt.output_mode),
+        )
         content = extract_body_content(sanitized)
         lang = extract_lang(sanitized, fallback_lang="it" if opt.output_mode == "libero" else "en")
 

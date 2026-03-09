@@ -167,7 +167,7 @@ def extract_body_content(html_in: str) -> str:
     return stripped.strip()
 
 
-def sanitize_input_html(html_in: str) -> str:
+def sanitize_input_html(html_in: str, *, preserve_mso_comments: bool = False) -> str:
     """Remove HTML comments and collapse inter-tag whitespace.
 
     Comments are stripped using a DOTALL pattern to cover multiline blocks, and
@@ -179,7 +179,13 @@ def sanitize_input_html(html_in: str) -> str:
     '<span>foo</span> <span>bar</span>'
     """
 
-    without_comments = re.sub(r"<!--.*?-->", "", html_in, flags=re.DOTALL)
+    def _strip_comment(match: re.Match[str]) -> str:
+        comment = match.group(0)
+        if preserve_mso_comments and re.search(r"\[if[^\]]*mso", comment, flags=re.IGNORECASE):
+            return comment
+        return ""
+
+    without_comments = re.sub(r"<!--.*?-->", _strip_comment, html_in, flags=re.DOTALL)
     normalized = normalize_input_html(without_comments)
     return _collapse_intertag_whitespace(normalized)
 
