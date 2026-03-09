@@ -117,19 +117,23 @@ def build_variant(
         else build_fake_jsonld_scripts(rng)
     )
 
-    if not strict_mode:
+    if not super_strict:
         ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
         ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
-        before = ie_before + noise_divs(
-            rng,
-            opt.noise_divs_max,
-            enabled=opt.enable_noise_divs,
-        )
-        after = noise_divs(
-            rng,
-            opt.noise_divs_max,
-            enabled=opt.enable_noise_divs,
-        ) + ie_after
+        if strict_mode:
+            before = ie_before
+            after = ie_after
+        else:
+            before = ie_before + noise_divs(
+                rng,
+                opt.noise_divs_max,
+                enabled=opt.enable_noise_divs,
+            )
+            after = noise_divs(
+                rng,
+                opt.noise_divs_max,
+                enabled=opt.enable_noise_divs,
+            ) + ie_after
     else:
         ie_before = ""
         ie_after = ""

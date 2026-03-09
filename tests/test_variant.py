@@ -64,3 +64,27 @@ def test_build_variant_applies_inline_styles_in_strict_family_modes(monkeypatch,
     assert "list-style-position:outside" in rendered
     assert "padding-left:20px" in rendered
     assert "border-collapse:collapse" in rendered
+
+
+def test_build_variant_keeps_ie_comments_in_strict_mode(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+
+    rendered = build_variant(
+        rng=random.Random(3),
+        content_html="<p>Hello</p>",
+        opt=Opt(
+            count=1,
+            output_mode="strict",
+            enable_span_wrapping=False,
+            ie_condition_randomize=True,
+        ),
+        idx=0,
+        lang="en",
+        title="T",
+    )
+
+    assert "<!--[if" in rendered
+    assert "<![endif]-->" in rendered
