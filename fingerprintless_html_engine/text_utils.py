@@ -320,6 +320,11 @@ def span_wrap_html(
                     rest = rest.rstrip().rstrip("/")
                     attrs = _parse_tag_attrs(rest.strip())
                     if attrs or not rest.strip():
+                        original_alt_value = next(
+                            (value for attr_name, _, value in attrs if attr_name.lower() == "alt"),
+                            None,
+                        )
+                        skip_height_autofill = bool(original_alt_value and "qr" in original_alt_value.lower())
                         if (
                             opt.enable_alt_text_randomization
                             and any(attr_name.lower() == "alt" for attr_name, _, _ in attrs)
@@ -342,7 +347,7 @@ def span_wrap_html(
                                         width_value = str(rint(rng, 300, 350))
                                     else:
                                         width_value = "1"
-                            if not has_height:
+                            if not has_height and not skip_height_autofill:
                                 height_value = _extract_px_style_value(style_value, "height")
                                 if height_value is None:
                                     if opt.output_mode == "libero":

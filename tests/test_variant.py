@@ -1,4 +1,5 @@
 import random
+import re
 
 import pytest
 
@@ -88,3 +89,25 @@ def test_build_variant_keeps_ie_comments_in_strict_mode(monkeypatch):
 
     assert "<!--[if" in rendered
     assert "<![endif]-->" in rendered
+
+
+def test_build_variant_does_not_autofill_img_height_for_qr_alt(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+
+    rendered = build_variant(
+        rng=random.Random(11),
+        content_html='<img src="https://example.com/qr.png" alt="Scan QR code">',
+        opt=Opt(count=1, output_mode="default", enable_span_wrapping=False, enable_alt_text_randomization=False),
+        idx=0,
+        lang="en",
+        title="T",
+    )
+
+    img_match = re.search(r"<img\b[^>]*>", rendered, re.IGNORECASE)
+    assert img_match is not None
+    img_tag = img_match.group(0)
+    assert re.search(r"\bwidth\s*=", img_tag, re.IGNORECASE)
+    assert not re.search(r"\bheight\s*=", img_tag, re.IGNORECASE)
