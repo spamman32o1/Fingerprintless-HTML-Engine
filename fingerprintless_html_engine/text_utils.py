@@ -343,17 +343,11 @@ def span_wrap_html(
                             if not has_width:
                                 width_value = _extract_px_style_value(style_value, "width")
                                 if width_value is None:
-                                    if opt.output_mode == "libero":
-                                        width_value = str(rint(rng, 300, 350))
-                                    else:
-                                        width_value = "1"
+                                    width_value = str(rint(rng, 300, 350))
                             if not has_height and not skip_height_autofill:
                                 height_value = _extract_px_style_value(style_value, "height")
                                 if height_value is None:
-                                    if opt.output_mode == "libero":
-                                        height_value = str(rint(rng, 200, 250))
-                                    else:
-                                        height_value = "1"
+                                    height_value = str(rint(rng, 200, 250))
                             if width_value is not None:
                                 styled_tag = _add_attr_if_missing(styled_tag, "width", width_value)
                             if height_value is not None:
