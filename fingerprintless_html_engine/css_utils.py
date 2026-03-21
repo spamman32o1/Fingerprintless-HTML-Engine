@@ -286,14 +286,13 @@ def random_css(
 
     source_color_context = source_color_context or SourceColorContext()
 
-    def _pick_color(
+    def _contrast_safe_colors(
         palette: list[str],
         *,
-        background: str | None = None,
+        background: str | None,
         minimum_contrast: float = 0.0,
         preserve_color: str | None = None,
-        fallback: str | None = None,
-    ) -> str:
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
         for color in [preserve_color, *palette]:
@@ -304,6 +303,22 @@ def random_css(
             if background and contrast_ratio(parsed, background) < minimum_contrast:
                 continue
             candidates.append(parsed)
+        return candidates
+
+    def _pick_color(
+        palette: list[str],
+        *,
+        background: str | None = None,
+        minimum_contrast: float = 0.0,
+        preserve_color: str | None = None,
+        fallback: str | None = None,
+    ) -> str:
+        candidates = _contrast_safe_colors(
+            palette,
+            background=background,
+            minimum_contrast=minimum_contrast,
+            preserve_color=preserve_color,
+        )
 
         preserved = parse_color_value(preserve_color)
         if preserved and (
@@ -937,8 +952,17 @@ def random_css(
     cell_padding = rfloat(rng, 8.0, 14.0, 2)
     cell_style_text = f"padding:{cell_padding}px;" "text-align:left;"
     extra_rules.append("th,td{" + cell_style_text + "}")
+    th_bg_color = f"rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)})"
+    th_fg_color = _pick_color(
+        [text_color, "#111827", "#f9fafb"],
+        background=th_bg_color,
+        minimum_contrast=MIN_TEXT_BG_CONTRAST,
+        preserve_color=text_color,
+        fallback=_safe_text_for_bg(th_bg_color),
+    )
     th_style_text = (
-        f"background-color:rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)});"
+        f"background-color:{th_bg_color};"
+        f"color:{th_fg_color};"
         + ("font-weight:700;" if maybe(rng, 0.55) else "")
     )
     extra_rules.append("th{" + th_style_text + "}")
@@ -968,12 +992,13 @@ def random_css(
             fallback=text_color,
         )
     )
+    button_effective_bg = accent_var if button_bg.startswith("var(") else button_bg
     button_fg = _pick_color(
         [text_color, "#ffffff", "#111827"],
-        background=button_bg if not button_bg.startswith("var(") else bg_color,
+        background=button_effective_bg,
         minimum_contrast=MIN_TEXT_BG_CONTRAST,
         preserve_color=text_color,
-        fallback=_safe_text_for_bg(button_bg if not button_bg.startswith("var(") else bg_color),
+        fallback=_safe_text_for_bg(button_effective_bg),
     )
     button_border = pick(
         rng,
@@ -1072,7 +1097,7 @@ def random_css(
     extra_rules.append("small,sub,sup{" + small_style_text + "}")
     mark_style_text = (
         f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
-        f"color:{_pick_color([text_color, '#111827'], background='#ffff00', minimum_contrast=MIN_TEXT_BG_CONTRAST, preserve_color=text_color, fallback='#111827')};"
+        f"color:{_pick_color([text_color, '#111827'], background='rgba(255, 255, 0, 1)', minimum_contrast=MIN_TEXT_BG_CONTRAST, preserve_color=text_color, fallback='#111827')};"
         "padding:0 2px;"
     )
     mark_rule = "mark{" + mark_style_text
