@@ -6,7 +6,12 @@ import re
 import uuid
 from collections import Counter
 
-from .css_utils import SourceColorContext, parse_color_value, parse_inline_style_declarations, random_css
+from .css_utils import (
+    SourceColorContext,
+    parse_color_value,
+    parse_inline_style_declarations,
+    random_css,
+)
 from .image_utils import RemoteImageCache, inline_image_references
 from .html_utils import minify_output_html
 from .jsonld_utils import build_fake_jsonld_scripts
@@ -14,7 +19,12 @@ from .models import Opt
 from .noise_utils import ie_noise_block, meta_noise, noise_divs
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
 from .structure_utils import randomize_structure, wrap_content_boxes
-from .tag_utils import _parse_tag_attrs, is_strict_output_mode, normalize_input_html, replace_cellspacing_with_css
+from .tag_utils import (
+    _parse_tag_attrs,
+    is_strict_output_mode,
+    normalize_input_html,
+    replace_cellspacing_with_css,
+)
 from .text_utils import span_wrap_html
 
 
@@ -79,11 +89,17 @@ def analyze_source_colors(content_html: str) -> SourceColorContext:
         for color in bg_colors:
             repeated_bg[color] += 1
 
-    repeated_text_colors = [color for color, count in repeated_text.items() if count > 1]
+    repeated_text_colors = [
+        color for color, count in repeated_text.items() if count > 1
+    ]
     repeated_bg_colors = [color for color, count in repeated_bg.items() if count > 1]
     return SourceColorContext(
-        source_text_color=(body_text_colors or layout_text_colors or repeated_text_colors or [None])[0],
-        source_bg_color=(body_bg_colors or layout_bg_colors or repeated_bg_colors or [None])[0],
+        source_text_color=(
+            body_text_colors or layout_text_colors or repeated_text_colors or [None]
+        )[0],
+        source_bg_color=(
+            body_bg_colors or layout_bg_colors or repeated_bg_colors or [None]
+        )[0],
         dominant_text_candidates=tuple(
             dict.fromkeys(body_text_colors + layout_text_colors + repeated_text_colors)
         ),
@@ -166,7 +182,11 @@ def build_variant(
     content_html = inline_image_references(
         content_html,
         enabled=opt.enable_image_inlining,
-        cache=(image_cache if opt.enable_remote_image_cache else RemoteImageCache(enabled=False)),
+        cache=(
+            image_cache
+            if opt.enable_remote_image_cache
+            else RemoteImageCache(enabled=False)
+        ),
     )
     source_color_context = analyze_source_colors(content_html)
     content_html = replace_cellspacing_with_css(content_html)
@@ -189,7 +209,9 @@ def build_variant(
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
     structured_html = (
-        content_html if super_strict else randomize_structure(rng, content_html, opt.structure_randomize)
+        content_html
+        if super_strict
+        else randomize_structure(rng, content_html, opt.structure_randomize)
     )
     inner = span_wrap_html(
         rng,
@@ -198,6 +220,7 @@ def build_variant(
         synonym_patterns,
         inline_styles=inline_styles if strict_mode else None,
         wrap_spans=not strict_mode and opt.enable_span_wrapping,
+        output_mode=opt.output_mode,
     )
     jsonld_scripts = (
         ""
@@ -217,11 +240,14 @@ def build_variant(
                 opt.noise_divs_max,
                 enabled=opt.enable_noise_divs,
             )
-            after = noise_divs(
-                rng,
-                opt.noise_divs_max,
-                enabled=opt.enable_noise_divs,
-            ) + ie_after
+            after = (
+                noise_divs(
+                    rng,
+                    opt.noise_divs_max,
+                    enabled=opt.enable_noise_divs,
+                )
+                + ie_after
+            )
     else:
         ie_before = ""
         ie_after = ""
@@ -243,7 +269,7 @@ def build_variant(
         nested_class = f"{uuid.uuid4().hex[:9]}"
         open_wrap += (
             f'<div class="{nested_class}" '
-            f"style=\"padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};\">"
+            f'style="padding:{pad}px;margin:{mt}px 0 {mb}px 0;display:{disp};">'
         )
         close_wrap = "</div>" + close_wrap
 
@@ -297,7 +323,9 @@ def build_layout_template(
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
     body_style_attr = (
-        f' style="{html.escape(body_css, quote=True)}"' if strict_mode and body_css else ""
+        f' style="{html.escape(body_css, quote=True)}"'
+        if strict_mode and body_css
+        else ""
     )
     if strict_mode and not disable_wrapper_styles and wrapper_css:
         wrapper_style_attr = f' style="{html.escape(wrapper_css, quote=True)}"'
@@ -318,11 +346,11 @@ def build_layout_template(
         )
     head_html = (
         "<!doctype html>"
-        f"<html lang=\"{html.escape(lang, quote=True)}\">"
+        f'<html lang="{html.escape(lang, quote=True)}">'
         "<head>"
-        "<meta charset=\"utf-8\" />"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
-        "<meta name=\"x-apple-disable-message-reformatting\" content=\"yes\" />"
+        '<meta charset="utf-8" />'
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+        '<meta name="x-apple-disable-message-reformatting" content="yes" />'
         f"{meta_noise(rng, enabled=enable_meta_noise) if not strict_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
@@ -330,17 +358,17 @@ def build_layout_template(
         "</head>"
     )
 
-    outer_table_class = '' if strict_mode else ' class="layout-table"'
+    outer_table_class = "" if strict_mode else ' class="layout-table"'
     outer_table_open = (
         f'<table role="presentation"{outer_table_class} '
-        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
+        'style="width:100%;border-collapse:collapse;border-spacing:0;">'
         "<tr><td>"
     )
     outer_table_close = "</td></tr></table>"
-    inner_table_class = '' if strict_mode else ' class="inner-table"'
+    inner_table_class = "" if strict_mode else ' class="inner-table"'
     inner_table_open = (
         f'<table role="presentation"{inner_table_class} '
-        "style=\"width:100%;border-collapse:collapse;border-spacing:0;\">"
+        'style="width:100%;border-collapse:collapse;border-spacing:0;">'
         "<tr><td>"
     )
     inner_table_close = "</td></tr></table>"
@@ -349,8 +377,8 @@ def build_layout_template(
     table_fallback_close = ""
     if allow_ie_conditional_comments:
         table_fallback_open = (
-            "<!--[if (mso)|(IE)]><table role=\"presentation\" width=\"100%\" "
-            "style=\"border-collapse:collapse;border-spacing:0;\"><tr><td><![endif]-->"
+            '<!--[if (mso)|(IE)]><table role="presentation" width="100%" '
+            'style="border-collapse:collapse;border-spacing:0;"><tr><td><![endif]-->'
         )
         table_fallback_close = "<!--[if (mso)|(IE)]></td></tr></table><![endif]-->"
 
@@ -379,9 +407,7 @@ def build_layout_template(
         after_body = after
 
     inner_html = wrap_content_boxes(inner) if not strict_mode else inner
-    content_inner = (
-        f"{open_wrap}{before_inner}<div{content_class_attr}>{inner_html}</div>{after_inner}{close_wrap}"
-    )
+    content_inner = f"{open_wrap}{before_inner}<div{content_class_attr}>{inner_html}</div>{after_inner}{close_wrap}"
 
     def build_wrapper(content_html: str) -> str:
         wrapper_open = f"<div{wrapper_class_attr}{wrapper_style_attr}>"
@@ -423,9 +449,15 @@ def build_layout_template(
                 "plain",
             ],
         )
-    use_outer_table = layout_choice in {"outer-table", "outer-table-fallback", "outer-table-inner"}
+    use_outer_table = layout_choice in {
+        "outer-table",
+        "outer-table-fallback",
+        "outer-table-inner",
+    }
     use_inner_table = layout_choice in {"outer-table-inner", "inner-only"}
-    use_commented_table = layout_choice == "outer-table-fallback" and allow_ie_conditional_comments
+    use_commented_table = (
+        layout_choice == "outer-table-fallback" and allow_ie_conditional_comments
+    )
 
     wrapper_default = build_wrapper(content_inner)
     body_inner = wrapper_default
@@ -436,6 +468,8 @@ def build_layout_template(
     if use_outer_table:
         outer_container = f"{outer_table_open}{outer_container}{outer_table_close}"
         if use_commented_table:
-            outer_container = f"{table_fallback_open}{outer_container}{table_fallback_close}"
+            outer_container = (
+                f"{table_fallback_open}{outer_container}{table_fallback_close}"
+            )
 
     return f"{head_html}<body{body_style_attr}>{before_body}{outer_container}{after_body}</body></html>"

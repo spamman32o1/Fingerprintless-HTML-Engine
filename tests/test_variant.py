@@ -10,11 +10,17 @@ from fingerprintless_html_engine.css_utils import (
     parse_color_value,
 )
 from fingerprintless_html_engine.models import Opt
+from fingerprintless_html_engine.text_utils import (
+    _extract_px_style_value,
+    _perturb_img_tag,
+)
 from fingerprintless_html_engine.variant import build_variant
 
 
 @pytest.mark.parametrize("output_mode", ["super_strict", "libero"])
-def test_build_variant_applies_inline_styles_in_strict_family_modes(monkeypatch, output_mode):
+def test_build_variant_applies_inline_styles_in_strict_family_modes(
+    monkeypatch, output_mode
+):
     inline_rules = InlineStyleRules(
         headings=(("--inline-heading", "1"),),
         blockquote=None,
@@ -44,11 +50,12 @@ def test_build_variant_applies_inline_styles_in_strict_family_modes(monkeypatch,
 
     content_html = (
         '<table align="center" cellpadding="3" cellspacing="2">'
-        "<tr><th>H</th><td>C <a href=\"#\">L</a></td></tr>"
+        '<tr><th>H</th><td>C <a href="#">L</a></td></tr>'
         "</table>"
         "<ul><li>one</li></ul>"
         "<h2>Heading</h2>"
     )
+
     rendered = build_variant(
         rng=random.Random(7),
         content_html=content_html,
@@ -78,6 +85,11 @@ def test_build_variant_keeps_ie_comments_in_strict_mode(monkeypatch):
         lambda rng, opt: opt,
     )
 
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.random_css",
+        lambda *args, **kwargs: ("", "", "", None),
+    )
+
     rendered = build_variant(
         rng=random.Random(3),
         content_html="<p>Hello</p>",
@@ -101,12 +113,21 @@ def test_build_variant_randomizes_only_img_width_for_all_output_modes(monkeypatc
         "fingerprintless_html_engine.variant.randomize_opt_for_variant",
         lambda rng, opt: opt,
     )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.random_css",
+        lambda *args, **kwargs: ("", "", "", None),
+    )
 
     for output_mode in ("default", "strict", "super_strict", "libero"):
         rendered = build_variant(
             rng=random.Random(11),
             content_html='<img src="https://example.com/image.png">',
-            opt=Opt(count=1, output_mode=output_mode, enable_span_wrapping=False, enable_image_inlining=False),
+            opt=Opt(
+                count=1,
+                output_mode=output_mode,
+                enable_span_wrapping=False,
+                enable_image_inlining=False,
+            ),
             idx=0,
             lang="en",
             title="T",
@@ -133,7 +154,13 @@ def test_build_variant_does_not_autofill_img_height_for_qr_alt(monkeypatch):
     rendered = build_variant(
         rng=random.Random(11),
         content_html='<img src="https://example.com/qr.png" alt="Scan QR code">',
-        opt=Opt(count=1, output_mode="default", enable_span_wrapping=False, enable_alt_text_randomization=False, enable_image_inlining=False),
+        opt=Opt(
+            count=1,
+            output_mode="default",
+            enable_span_wrapping=False,
+            enable_alt_text_randomization=False,
+            enable_image_inlining=False,
+        ),
         idx=0,
         lang="en",
         title="T",
@@ -147,13 +174,17 @@ def test_build_variant_does_not_autofill_img_height_for_qr_alt(monkeypatch):
 
 
 def _extract_style_block(rendered: str) -> str:
-    style_match = re.search(r"<style>(.*?)</style>", rendered, re.IGNORECASE | re.DOTALL)
+    style_match = re.search(
+        r"<style>(.*?)</style>", rendered, re.IGNORECASE | re.DOTALL
+    )
     assert style_match is not None
     return style_match.group(1)
 
 
 def _extract_rule(css_text: str, selector: str) -> str:
-    rule_match = re.search(rf"{re.escape(selector)}\{{([^}}]*)\}}", css_text, re.IGNORECASE)
+    rule_match = re.search(
+        rf"{re.escape(selector)}\{{([^}}]*)\}}", css_text, re.IGNORECASE
+    )
     assert rule_match is not None
     return rule_match.group(1)
 
@@ -175,7 +206,9 @@ def _resolve_color(value: str, variables: dict[str, str]) -> str | None:
     return parse_color_value(value)
 
 
-def test_build_variant_keeps_body_links_and_buttons_contrast_safe_on_light_source_bg(monkeypatch):
+def test_build_variant_keeps_body_links_and_buttons_contrast_safe_on_light_source_bg(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "fingerprintless_html_engine.variant.randomize_opt_for_variant",
         lambda rng, opt: opt,
@@ -197,8 +230,12 @@ def test_build_variant_keeps_body_links_and_buttons_contrast_safe_on_light_sourc
         "fingerprintless_html_engine.css_utils.BG_COLORS",
         ["#ffffff", "#fefefe"],
     )
-    monkeypatch.setattr("fingerprintless_html_engine.css_utils.pick", lambda rng, seq: list(seq)[0])
-    monkeypatch.setattr("fingerprintless_html_engine.css_utils.maybe", lambda rng, probability: True)
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.css_utils.pick", lambda rng, seq: list(seq)[0]
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.css_utils.maybe", lambda rng, probability: True
+    )
 
     rendered = build_variant(
         rng=random.Random(13),
@@ -212,7 +249,9 @@ def test_build_variant_keeps_body_links_and_buttons_contrast_safe_on_light_sourc
     css_text = _extract_style_block(rendered)
     body_rule = _extract_rule(css_text, "body")
     link_rule = _extract_rule(css_text, "a")
-    button_rule = _extract_rule(css_text, "button,input[type=button],input[type=submit],input[type=reset]")
+    button_rule = _extract_rule(
+        css_text, "button,input[type=button],input[type=submit],input[type=reset]"
+    )
 
     variables = {
         "--bg": _extract_decl(body_rule, "--bg"),
@@ -229,3 +268,112 @@ def test_build_variant_keeps_body_links_and_buttons_contrast_safe_on_light_sourc
     assert contrast_ratio(body_fg, body_bg) >= 4.5
     assert contrast_ratio(link_fg, body_bg) >= 3.0
     assert contrast_ratio(button_fg, button_bg) >= 4.5
+
+
+def test_extract_px_style_value_keeps_integer_sizing_intact():
+    assert _extract_px_style_value("width:20px;height:40px", "width") == "20"
+    assert _extract_px_style_value("width:20.50px", "width") == "20.5"
+
+
+def test_img_perturbation_default_mode_adds_small_inline_jitter(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.maybe", lambda _rng, _p: True
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.rint", lambda _rng, low, high: high
+    )
+
+    perturbed = _perturb_img_tag(
+        random.Random(1),
+        '<img src="https://example.com/image.png" width="320">',
+        [
+            (
+                "src",
+                'src="https://example.com/image.png"',
+                "https://example.com/image.png",
+            ),
+            ("width", 'width="320"', "320"),
+        ],
+        output_mode="default",
+        open_tag_stack=["p"],
+    )
+
+    assert "position:relative" in perturbed
+    assert "top:1px" in perturbed
+    assert "left:1px" in perturbed
+    assert "margin-left:1px" in perturbed
+
+
+@pytest.mark.parametrize("output_mode", ["super_strict", "libero"])
+def test_img_perturbation_strictest_modes_stay_in_compatible_subset(
+    monkeypatch, output_mode
+):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.maybe", lambda _rng, _p: True
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.rint", lambda _rng, low, high: high
+    )
+
+    perturbed = _perturb_img_tag(
+        random.Random(1),
+        '<img src="https://example.com/image.png" width="320">',
+        [
+            (
+                "src",
+                'src="https://example.com/image.png"',
+                "https://example.com/image.png",
+            ),
+            ("width", 'width="320"', "320"),
+        ],
+        output_mode=output_mode,
+        open_tag_stack=["p"],
+    )
+
+    assert "margin-left:1px" in perturbed
+    assert "position:relative" not in perturbed
+    assert "<span" not in perturbed and "<div" not in perturbed
+
+
+def test_build_variant_preserves_sized_img_layout_constraints_with_wrapper_noise(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.random_css",
+        lambda *args, **kwargs: ("", "", "", None),
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.maybe", lambda _rng, _p: True
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.text_utils.rint", lambda _rng, low, high: high
+    )
+
+    rendered = build_variant(
+        rng=random.Random(2),
+        content_html='<p><img src="x.png" style="display:block;width:20px"></p>',
+        opt=Opt(
+            count=1,
+            output_mode="default",
+            enable_span_wrapping=False,
+            enable_image_inlining=False,
+        ),
+        idx=0,
+        lang="en",
+        title="T",
+    )
+
+    assert re.search(
+        r'<span\b[^>]*style="[^"]*display:inline-block;position:relative;[^"]*">',
+        rendered,
+    )
+    img_match = re.search(r"<img\b[^>]*>", rendered, re.IGNORECASE)
+    assert img_match is not None
+    img_tag = img_match.group(0)
+    assert 'style="display:block;width:20px"' in img_tag
+    assert 'width="20"' in img_tag
+    assert "margin-left" not in img_tag and "padding-right" not in img_tag
