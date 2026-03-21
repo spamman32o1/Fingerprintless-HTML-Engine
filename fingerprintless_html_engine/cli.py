@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable, List, Sequence
 
 from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
+from .image_utils import RemoteImageCache
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
 from .synonym_discovery import (
@@ -200,6 +201,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable body-level styling rules (no body styles or background rendering).",
     )
     parser.add_argument(
+        "--no-image-inlining",
+        action="store_false",
+        dest="enable_image_inlining",
+        help="Disable preprocessing that inlines remote image references as data URLs.",
+    )
+    parser.add_argument(
+        "--no-remote-image-cache",
+        action="store_false",
+        dest="enable_remote_image_cache",
+        help="Disable reuse of downloaded remote image payloads across references within a run.",
+    )
+    parser.add_argument(
         "--pretty-output",
         action="store_true",
         dest="pretty_output",
@@ -254,7 +267,12 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="generated_synonym_map_filename",
         help="Filename to use when writing the generated synonym map (default: generated_synonym_map.txt).",
     )
-    parser.set_defaults(ie_condition_randomize=True, structure_randomize=True)
+    parser.set_defaults(
+        ie_condition_randomize=True,
+        structure_randomize=True,
+        enable_image_inlining=True,
+        enable_remote_image_cache=True,
+    )
     return parser
 
 
@@ -469,6 +487,8 @@ def main() -> None:
         enable_wrapper_nesting=args.enable_wrapper_nesting,
         enable_layout_randomization=args.enable_layout_randomization,
         enable_body_styles=args.enable_body_styles,
+        enable_image_inlining=args.enable_image_inlining,
+        enable_remote_image_cache=args.enable_remote_image_cache,
         disable_layout_tables=args.disable_layout_tables,
         disable_wrapper_styles=args.disable_wrapper_styles,
         pretty_output=pretty_output,
@@ -487,6 +507,9 @@ def main() -> None:
         base_outdir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random()
+    image_cache = None
+    if opt.enable_image_inlining and opt.enable_remote_image_cache:
+        image_cache = RemoteImageCache(enabled=True)
 
     def _sanitize_token(value: str) -> str:
         cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value)
@@ -539,7 +562,16 @@ def main() -> None:
 
         for i in range(1, opt.count + 1):
             variant_title = random_title()
-            variant = build_variant(rng, content, opt, i, lang, variant_title, synonym_patterns)
+            variant = build_variant(
+                rng,
+                content,
+                opt,
+                i,
+                lang,
+                variant_title,
+                synonym_patterns,
+                image_cache=image_cache,
+            )
             if opt.output_mode == "libero":
                 variant = _build_libero_html(variant)
                 output_name = f"{filename_prefix}variant_{i:03d}.html"

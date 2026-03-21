@@ -106,7 +106,7 @@ def test_build_variant_randomizes_only_img_width_for_all_output_modes(monkeypatc
         rendered = build_variant(
             rng=random.Random(11),
             content_html='<img src="https://example.com/image.png">',
-            opt=Opt(count=1, output_mode=output_mode, enable_span_wrapping=False),
+            opt=Opt(count=1, output_mode=output_mode, enable_span_wrapping=False, enable_image_inlining=False),
             idx=0,
             lang="en",
             title="T",
@@ -133,7 +133,7 @@ def test_build_variant_does_not_autofill_img_height_for_qr_alt(monkeypatch):
     rendered = build_variant(
         rng=random.Random(11),
         content_html='<img src="https://example.com/qr.png" alt="Scan QR code">',
-        opt=Opt(count=1, output_mode="default", enable_span_wrapping=False, enable_alt_text_randomization=False),
+        opt=Opt(count=1, output_mode="default", enable_span_wrapping=False, enable_alt_text_randomization=False, enable_image_inlining=False),
         idx=0,
         lang="en",
         title="T",

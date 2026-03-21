@@ -7,6 +7,7 @@ import uuid
 from collections import Counter
 
 from .css_utils import SourceColorContext, parse_color_value, parse_inline_style_declarations, random_css
+from .image_utils import RemoteImageCache, inline_image_references
 from .html_utils import minify_output_html
 from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
@@ -134,6 +135,8 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_wrapper_nesting=opt.enable_wrapper_nesting,
         enable_layout_randomization=opt.enable_layout_randomization,
         enable_body_styles=opt.enable_body_styles,
+        enable_image_inlining=opt.enable_image_inlining,
+        enable_remote_image_cache=opt.enable_remote_image_cache,
         disable_layout_tables=opt.disable_layout_tables,
         disable_wrapper_styles=opt.disable_wrapper_styles,
         pretty_output=opt.pretty_output,
@@ -152,6 +155,7 @@ def build_variant(
     lang: str,
     title: str,
     synonym_patterns=None,
+    image_cache: RemoteImageCache | None = None,
 ) -> str:
     if synonym_patterns is None:
         synonym_patterns = []
@@ -159,6 +163,11 @@ def build_variant(
     strict_mode = is_strict_output_mode(opt.output_mode)
     super_strict = opt.output_mode in {"super_strict", "libero"}
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
+    content_html = inline_image_references(
+        content_html,
+        enabled=opt.enable_image_inlining,
+        cache=(image_cache if opt.enable_remote_image_cache else RemoteImageCache(enabled=False)),
+    )
     source_color_context = analyze_source_colors(content_html)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
