@@ -8,6 +8,29 @@ from .random_utils import maybe, pick, rfloat
 from .tag_utils import is_strict_output_mode
 
 
+COLOR_NAME_MAP = {
+    "aqua": "#00ffff",
+    "black": "#000000",
+    "blue": "#0000ff",
+    "fuchsia": "#ff00ff",
+    "gray": "#808080",
+    "green": "#008000",
+    "grey": "#808080",
+    "lime": "#00ff00",
+    "maroon": "#800000",
+    "navy": "#000080",
+    "olive": "#808000",
+    "purple": "#800080",
+    "red": "#ff0000",
+    "silver": "#c0c0c0",
+    "teal": "#008080",
+    "white": "#ffffff",
+    "yellow": "#ffff00",
+}
+MIN_TEXT_BG_CONTRAST = 4.5
+MIN_ACCENT_CONTRAST = 3.0
+
+
 FONT_FALLBACKS = {
     "sans": ["system-ui", "-apple-system", "'Segoe UI'", "Arial", "sans-serif"],
     "serif": ["ui-serif", "'Times New Roman'", "Times", "serif"],
@@ -38,6 +61,122 @@ class InlineStyleRules:
     mark: tuple[tuple[str, str], ...]
     abbr: tuple[tuple[str, str], ...]
     cite_em: tuple[tuple[str, str], ...] | None
+
+
+@dataclass(frozen=True)
+class SourceColorContext:
+    source_text_color: str | None = None
+    source_bg_color: str | None = None
+    dominant_text_candidates: tuple[str, ...] = tuple()
+    dominant_bg_candidates: tuple[str, ...] = tuple()
+
+
+def parse_inline_style_declarations(style_value: str | None) -> dict[str, str]:
+    declarations: dict[str, str] = {}
+    if not style_value:
+        return declarations
+    for part in style_value.split(";"):
+        if ":" not in part:
+            continue
+        prop, value = part.split(":", 1)
+        prop = prop.strip().lower()
+        if not prop:
+            continue
+        declarations[prop] = value.strip()
+    return declarations
+
+
+def _normalize_hex_color(value: str) -> str | None:
+    value = value.strip().lstrip("#")
+    if len(value) == 3 and all(ch in "0123456789abcdefABCDEF" for ch in value):
+        return "#" + "".join(ch * 2 for ch in value).lower()
+    if len(value) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in value):
+        return f"#{value.lower()}"
+    return None
+
+
+def _parse_rgb_channel(value: str) -> int | None:
+    value = value.strip()
+    if value.endswith("%"):
+        try:
+            return max(0, min(255, round(float(value[:-1]) * 2.55)))
+        except ValueError:
+            return None
+    try:
+        return max(0, min(255, round(float(value))))
+    except ValueError:
+        return None
+
+
+def parse_color_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip().lower()
+    if value in {"", "inherit", "initial", "transparent", "unset", "currentcolor", "none"}:
+        return None
+    if value.startswith("#"):
+        return _normalize_hex_color(value)
+    if value in COLOR_NAME_MAP:
+        return COLOR_NAME_MAP[value]
+    if value.startswith("rgb(") and value.endswith(")"):
+        channels = [_parse_rgb_channel(part) for part in value[4:-1].split(",")]
+        if len(channels) != 3 or any(channel is None for channel in channels):
+            return None
+        return "#" + "".join(f"{channel:02x}" for channel in channels if channel is not None)
+    if value.startswith("rgba(") and value.endswith(")"):
+        parts = [part.strip() for part in value[5:-1].split(",")]
+        if len(parts) != 4:
+            return None
+        try:
+            if float(parts[3]) <= 0:
+                return None
+        except ValueError:
+            return None
+        channels = [_parse_rgb_channel(part) for part in parts[:3]]
+        if any(channel is None for channel in channels):
+            return None
+        return "#" + "".join(f"{channel:02x}" for channel in channels if channel is not None)
+    return None
+
+
+def _hex_to_rgb(color: str | None) -> tuple[int, int, int] | None:
+    normalized = parse_color_value(color)
+    if not normalized:
+        return None
+    return tuple(int(normalized[index:index + 2], 16) for index in (1, 3, 5))
+
+
+def _relative_luminance(color: str | None) -> float | None:
+    rgb = _hex_to_rgb(color)
+    if rgb is None:
+        return None
+    channels: list[float] = []
+    for value in rgb:
+        srgb = value / 255
+        channels.append(srgb / 12.92 if srgb <= 0.03928 else ((srgb + 0.055) / 1.055) ** 2.4)
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(color_a: str | None, color_b: str | None) -> float:
+    luminance_a = _relative_luminance(color_a)
+    luminance_b = _relative_luminance(color_b)
+    if luminance_a is None or luminance_b is None:
+        return 0.0
+    lighter = max(luminance_a, luminance_b)
+    darker = min(luminance_a, luminance_b)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _is_light_color(color: str | None) -> bool | None:
+    luminance = _relative_luminance(color)
+    if luminance is None:
+        return None
+    return luminance >= 0.45
+
+
+def _safe_text_for_bg(bg_color: str | None) -> str:
+    return "#111827" if _is_light_color(bg_color) is not False else "#f9fafb"
 
 
 def _rules_to_inline(rule_text: str) -> tuple[tuple[str, str], ...]:
@@ -132,6 +271,7 @@ def random_css(
     enable_noise_textures: bool = True,
     enable_color_palette_randomization: bool = True,
     enable_body_styles: bool = True,
+    source_color_context: SourceColorContext | None = None,
 ) -> tuple[str, str, str, InlineStyleRules]:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
@@ -144,12 +284,38 @@ def random_css(
         enable_font_randomization = False
         enable_font_features = False
 
-    def _pick_color(palette: list[str]) -> str:
-        if not palette:
-            return "#111827"
+    source_color_context = source_color_context or SourceColorContext()
+
+    def _pick_color(
+        palette: list[str],
+        *,
+        background: str | None = None,
+        minimum_contrast: float = 0.0,
+        preserve_color: str | None = None,
+        fallback: str | None = None,
+    ) -> str:
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for color in [preserve_color, *palette]:
+            parsed = parse_color_value(color)
+            if not parsed or parsed in seen:
+                continue
+            seen.add(parsed)
+            if background and contrast_ratio(parsed, background) < minimum_contrast:
+                continue
+            candidates.append(parsed)
+
+        preserved = parse_color_value(preserve_color)
+        if preserved and (
+            not background or contrast_ratio(preserved, background) >= minimum_contrast
+        ):
+            return preserved
+
+        if not candidates:
+            return parse_color_value(fallback) or "#111827"
         if not enable_color_palette_randomization:
-            return palette[0]
-        return pick(rng, palette)
+            return candidates[0]
+        return pick(rng, candidates)
 
     base_font = ""
     base_is_variable = False
@@ -227,8 +393,12 @@ def random_css(
     pad = rfloat(rng, 8.0, 24.0, 2)
     margin_top = rfloat(rng, 6.0, 22.0, 2)
 
+    source_bg_color = parse_color_value(source_color_context.source_bg_color)
+    source_text_color = parse_color_value(source_color_context.source_text_color)
     dark_theme = (
-        maybe(rng, 0.24) if allow_dark_mode and enable_color_palette_randomization else False
+        _is_light_color(source_bg_color) is False
+        if source_bg_color
+        else (maybe(rng, 0.24) if allow_dark_mode and enable_color_palette_randomization else False)
     )
     text_palette = TEXT_COLORS if not dark_theme else [
         "#e5e7eb",
@@ -246,8 +416,24 @@ def random_css(
     ]
 
     opacity = 1.0 if super_strict else (rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0)
-    text_color = _pick_color(text_palette)
-    bg_color = _pick_color(bg_palette)
+    bg_candidates = list(dict.fromkeys([*source_color_context.dominant_bg_candidates, *bg_palette]))
+    bg_color = _pick_color(
+        bg_candidates,
+        preserve_color=source_bg_color,
+        fallback=source_bg_color or bg_palette[0],
+    )
+    text_candidates = list(
+        dict.fromkeys([*source_color_context.dominant_text_candidates, *text_palette, "#111827", "#f9fafb"])
+    )
+    text_color = _pick_color(
+        text_candidates,
+        background=bg_color,
+        minimum_contrast=MIN_TEXT_BG_CONTRAST,
+        preserve_color=source_text_color,
+        fallback=source_text_color or _safe_text_for_bg(bg_color),
+    )
+    if source_text_color and source_bg_color and contrast_ratio(source_text_color, source_bg_color) < MIN_TEXT_BG_CONTRAST:
+        text_color = _safe_text_for_bg(bg_color)
 
     body_background_images: list[str] = []
     gradient_options = []
@@ -348,8 +534,13 @@ def random_css(
     ]
     if dark_theme:
         accent_candidates.extend(["#93c5fd", "#7dd3fc", "#f472b6", "#f59e0b", "#22c55e", "#c7d2fe"])
-    accent_var = _pick_color(accent_candidates)
-    bg_var = _pick_color(bg_palette)
+    accent_var = _pick_color(
+        accent_candidates,
+        background=bg_color,
+        minimum_contrast=MIN_ACCENT_CONTRAST,
+        fallback=text_color,
+    )
+    bg_var = _pick_color(bg_candidates, preserve_color=bg_color, fallback=bg_color)
 
     use_bg_var = use_css_vars and maybe(rng, 0.55)
     use_accent_var = use_css_vars and maybe(rng, 0.55)
@@ -644,17 +835,32 @@ def random_css(
     link_color = (
         "var(--accent)"
         if use_accent_var and maybe(rng, 0.55)
-        else _pick_color(accent_palette)
+        else _pick_color(
+            accent_palette,
+            background=bg_color,
+            minimum_contrast=MIN_ACCENT_CONTRAST,
+            fallback=text_color,
+        )
     )
     hover_color = (
         "var(--accent)"
         if use_accent_var and maybe(rng, 0.45)
-        else _pick_color(accent_palette)
+        else _pick_color(
+            accent_palette,
+            background=bg_color,
+            minimum_contrast=MIN_ACCENT_CONTRAST,
+            fallback=text_color,
+        )
     )
     active_color = (
         "var(--accent)"
         if use_accent_var and maybe(rng, 0.35)
-        else _pick_color(accent_palette)
+        else _pick_color(
+            accent_palette,
+            background=bg_color,
+            minimum_contrast=MIN_ACCENT_CONTRAST,
+            fallback=text_color,
+        )
     )
     underline = pick(rng, underline_styles)
     underline_thickness = rfloat(rng, 1.0, 2.4, 2)
@@ -714,7 +920,7 @@ def random_css(
     if maybe(rng, 0.30):
         extra_rules.append(
             "ul li::marker, ol li::marker{"
-            + f"color:{_pick_color(accent_palette)};"
+            + f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
             + (f"font-size:{rfloat(rng, 1.0, 1.2, 2)}em;" if maybe(rng, 0.32) else "")
             + "}"
         )
@@ -745,7 +951,7 @@ def random_css(
     if maybe(rng, 0.28):
         caption_style_text = (
             f"caption-side:{pick(rng, ['top', 'bottom'])};"
-            f"color:{_pick_color(accent_palette)};"
+            f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
             f"font-style:{pick(rng, ['normal', 'italic'])};"
             "padding:6px;"
         )
@@ -755,9 +961,20 @@ def random_css(
     button_bg = (
         "var(--accent)"
         if use_accent_var and maybe(rng, 0.40)
-        else _pick_color(accent_palette)
+        else _pick_color(
+            accent_palette,
+            background=bg_color,
+            minimum_contrast=MIN_ACCENT_CONTRAST,
+            fallback=text_color,
+        )
     )
-    button_fg = _pick_color([text_color, "#ffffff", "#111827"])
+    button_fg = _pick_color(
+        [text_color, "#ffffff", "#111827"],
+        background=button_bg if not button_bg.startswith("var(") else bg_color,
+        minimum_contrast=MIN_TEXT_BG_CONTRAST,
+        preserve_color=text_color,
+        fallback=_safe_text_for_bg(button_bg if not button_bg.startswith("var(") else bg_color),
+    )
     button_border = pick(
         rng,
         [
@@ -804,7 +1021,9 @@ def random_css(
         )
     extra_rules.append(button_rule)
 
-    button_hover = [f"background:{_pick_color(accent_palette)};"]
+    button_hover = [
+        f"background:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
+    ]
     if maybe(rng, 0.40):
         button_hover.append("transform:translateY(-1px);")
     if maybe(rng, 0.38):
@@ -826,7 +1045,9 @@ def random_css(
         + "".join(button_hover)
         + "}"
     )
-    button_active = [f"background:{_pick_color(accent_palette)};"]
+    button_active = [
+        f"background:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
+    ]
     if maybe(rng, 0.44):
         button_active.append("transform:translateY(0px) scale(0.99);")
     if maybe(rng, 0.30):
@@ -837,7 +1058,12 @@ def random_css(
         + "}"
     )
 
-    inline_accent_color = _pick_color(accent_palette)
+    inline_accent_color = _pick_color(
+        accent_palette,
+        background=bg_color,
+        minimum_contrast=MIN_ACCENT_CONTRAST,
+        fallback=text_color,
+    )
     small_style_text = (
         f"color:{inline_accent_color};"
         + (f"font-weight:{pick(rng, ['500', '600'])};" if maybe(rng, 0.40) else "")
@@ -846,7 +1072,7 @@ def random_css(
     extra_rules.append("small,sub,sup{" + small_style_text + "}")
     mark_style_text = (
         f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
-        f"color:{_pick_color([text_color, '#111827'])};"
+        f"color:{_pick_color([text_color, '#111827'], background='#ffff00', minimum_contrast=MIN_TEXT_BG_CONTRAST, preserve_color=text_color, fallback='#111827')};"
         "padding:0 2px;"
     )
     mark_rule = "mark{" + mark_style_text
@@ -863,7 +1089,10 @@ def random_css(
     extra_rules.append("abbr{" + abbr_style_text + "}")
     cite_inline: tuple[tuple[str, str], ...] | None = None
     if maybe(rng, 0.26):
-        cite_style_text = f"color:{_pick_color(accent_palette)};" "font-style:italic;"
+        cite_style_text = (
+            f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
+            "font-style:italic;"
+        )
         extra_rules.append("cite,em{" + cite_style_text + "}")
         cite_inline = _rules_to_inline(cite_style_text)
 

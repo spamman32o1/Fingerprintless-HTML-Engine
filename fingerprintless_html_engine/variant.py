@@ -2,17 +2,94 @@ from __future__ import annotations
 
 import html
 import random
+import re
 import uuid
+from collections import Counter
 
-from .css_utils import random_css
+from .css_utils import SourceColorContext, parse_color_value, parse_inline_style_declarations, random_css
 from .html_utils import minify_output_html
 from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
 from .noise_utils import ie_noise_block, meta_noise, noise_divs
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
 from .structure_utils import randomize_structure, wrap_content_boxes
-from .tag_utils import is_strict_output_mode, normalize_input_html, replace_cellspacing_with_css
+from .tag_utils import _parse_tag_attrs, is_strict_output_mode, normalize_input_html, replace_cellspacing_with_css
 from .text_utils import span_wrap_html
+
+
+START_TAG_RE = re.compile(r"<([a-zA-Z0-9:_-]+)([^>]*)>", re.IGNORECASE)
+
+
+def _extract_colors_from_attrs(
+    attr_text: str,
+    *,
+    style_props: tuple[str, ...],
+    legacy_attrs: tuple[str, ...],
+) -> list[str]:
+    style_colors: list[str] = []
+    legacy_colors: list[str] = []
+    attrs = _parse_tag_attrs(attr_text.strip())
+    if not attrs and attr_text.strip():
+        return []
+
+    for attr_name, _raw, value in attrs:
+        attr_lower = attr_name.lower()
+        if attr_lower == "style" and value:
+            style_map = parse_inline_style_declarations(value)
+            for prop_name in style_props:
+                parsed = parse_color_value(style_map.get(prop_name))
+                if parsed:
+                    style_colors.append(parsed)
+        elif attr_lower in legacy_attrs:
+            parsed = parse_color_value(value)
+            if parsed:
+                legacy_colors.append(parsed)
+    return style_colors + legacy_colors
+
+
+def analyze_source_colors(content_html: str) -> SourceColorContext:
+    body_text_colors: list[str] = []
+    body_bg_colors: list[str] = []
+    layout_text_colors: list[str] = []
+    layout_bg_colors: list[str] = []
+    repeated_text: Counter[str] = Counter()
+    repeated_bg: Counter[str] = Counter()
+
+    for tag_name, attr_text in START_TAG_RE.findall(content_html):
+        tag_name = tag_name.lower()
+        text_colors = _extract_colors_from_attrs(
+            attr_text,
+            style_props=("color",),
+            legacy_attrs=("text", "color"),
+        )
+        bg_colors = _extract_colors_from_attrs(
+            attr_text,
+            style_props=("background-color", "background"),
+            legacy_attrs=("bgcolor",),
+        )
+        if tag_name == "body":
+            body_text_colors.extend(text_colors)
+            body_bg_colors.extend(bg_colors)
+        if tag_name in {"table", "tbody", "tr", "td", "th"}:
+            layout_text_colors.extend(text_colors)
+            layout_bg_colors.extend(bg_colors)
+        for color in text_colors:
+            repeated_text[color] += 1
+        for color in bg_colors:
+            repeated_bg[color] += 1
+
+    repeated_text_colors = [color for color, count in repeated_text.items() if count > 1]
+    repeated_bg_colors = [color for color, count in repeated_bg.items() if count > 1]
+    return SourceColorContext(
+        source_text_color=(body_text_colors or layout_text_colors or repeated_text_colors or [None])[0],
+        source_bg_color=(body_bg_colors or layout_bg_colors or repeated_bg_colors or [None])[0],
+        dominant_text_candidates=tuple(
+            dict.fromkeys(body_text_colors + layout_text_colors + repeated_text_colors)
+        ),
+        dominant_bg_candidates=tuple(
+            dict.fromkeys(body_bg_colors + layout_bg_colors + repeated_bg_colors)
+        ),
+    )
 
 
 def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
@@ -82,6 +159,7 @@ def build_variant(
     strict_mode = is_strict_output_mode(opt.output_mode)
     super_strict = opt.output_mode in {"super_strict", "libero"}
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
+    source_color_context = analyze_source_colors(content_html)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
         rng,
@@ -95,6 +173,7 @@ def build_variant(
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
         enable_body_styles=opt.enable_body_styles,
+        source_color_context=source_color_context,
     )
     if opt.disable_wrapper_styles:
         wrapper_css = ""
