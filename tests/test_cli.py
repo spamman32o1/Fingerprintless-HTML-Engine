@@ -58,6 +58,18 @@ def test_merge_synonym_groups_combines_sources_and_deduplicates() -> None:
     assert merged == [["Fast", "Quick"], ["Small", "Tiny"], ["Large", "Big"]]
 
 
+def test_build_parser_supports_image_inlining_flags() -> None:
+    parser = _build_parser()
+
+    args = parser.parse_args([])
+    assert args.enable_image_inlining is True
+    assert args.enable_remote_image_cache is True
+
+    args = parser.parse_args(["--no-image-inlining", "--no-remote-image-cache"])
+    assert args.enable_image_inlining is False
+    assert args.enable_remote_image_cache is False
+
+
 def test_build_parser_supports_generated_synonym_map_output_flags() -> None:
     parser = _build_parser()
 
