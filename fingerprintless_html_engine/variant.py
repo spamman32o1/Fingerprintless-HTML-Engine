@@ -181,7 +181,7 @@ def build_variant(
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
     content_html = inline_image_references(
         content_html,
-        enabled=opt.enable_image_inlining,
+        enabled=opt.enable_image_inlining and opt.output_mode != "libero",
         cache=(
             image_cache
             if opt.enable_remote_image_cache

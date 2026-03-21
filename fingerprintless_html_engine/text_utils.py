@@ -472,8 +472,11 @@ def span_wrap_html(
                     rest = rest.rstrip().rstrip("/")
                     attrs = _parse_tag_attrs(rest.strip())
                     if attrs or not rest.strip():
-                        if opt.enable_alt_text_randomization and any(
-                            attr_name.lower() == "alt" for attr_name, _, _ in attrs
+                        disable_image_mutation = effective_output_mode == "libero"
+                        if (
+                            not disable_image_mutation
+                            and opt.enable_alt_text_randomization
+                            and any(attr_name.lower() == "alt" for attr_name, _, _ in attrs)
                         ):
                             # Alt text is intentionally randomized to reduce fingerprinting surface.
                             randomized_alt = _random_alt_text(rng)
@@ -492,41 +495,42 @@ def span_wrap_html(
                                 )
                                 for attr_name, raw, value in attrs
                             ]
-                        has_width = any(
-                            attr_name.lower() == "width" for attr_name, _, _ in attrs
-                        )
-                        has_height = any(
-                            attr_name.lower() == "height" for attr_name, _, _ in attrs
-                        )
-                        if not has_width or not has_height:
-                            style_value = next(
-                                (
-                                    value
-                                    for attr_name, _, value in attrs
-                                    if attr_name.lower() == "style"
-                                ),
-                                None,
+                        if not disable_image_mutation:
+                            has_width = any(
+                                attr_name.lower() == "width" for attr_name, _, _ in attrs
                             )
-                            width_value = None
-                            if not has_width:
-                                width_value = _extract_px_style_value(
-                                    style_value, "width"
+                            has_height = any(
+                                attr_name.lower() == "height" for attr_name, _, _ in attrs
+                            )
+                            if not has_width or not has_height:
+                                style_value = next(
+                                    (
+                                        value
+                                        for attr_name, _, value in attrs
+                                        if attr_name.lower() == "style"
+                                    ),
+                                    None,
                                 )
-                                if width_value is None:
-                                    width_value = str(rint(rng, 300, 350))
-                                styled_tag = _add_attr_if_missing(
-                                    styled_tag, "width", width_value
-                                )
-                                attrs.append(
-                                    ("width", f'width="{width_value}"', width_value)
-                                )
-                        styled_tag = _perturb_img_tag(
-                            rng,
-                            styled_tag,
-                            attrs,
-                            output_mode=effective_output_mode,
-                            open_tag_stack=open_tag_stack,
-                        )
+                                width_value = None
+                                if not has_width:
+                                    width_value = _extract_px_style_value(
+                                        style_value, "width"
+                                    )
+                                    if width_value is None:
+                                        width_value = str(rint(rng, 300, 350))
+                                    styled_tag = _add_attr_if_missing(
+                                        styled_tag, "width", width_value
+                                    )
+                                    attrs.append(
+                                        ("width", f'width="{width_value}"', width_value)
+                                    )
+                            styled_tag = _perturb_img_tag(
+                                rng,
+                                styled_tag,
+                                attrs,
+                                output_mode=effective_output_mode,
+                                open_tag_stack=open_tag_stack,
+                            )
 
             if m and name == "tbody" and not is_self_close:
                 if not is_close:
