@@ -108,6 +108,40 @@ def test_build_variant_keeps_ie_comments_in_strict_mode(monkeypatch):
     assert "<![endif]-->" in rendered
 
 
+def test_build_variant_keeps_libero_images_remote_and_unrandomized(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.random_css",
+        lambda *args, **kwargs: ("", "", "", None),
+    )
+
+    rendered = build_variant(
+        rng=random.Random(11),
+        content_html='<img src="https://example.com/image.png" alt="Original alt">',
+        opt=Opt(
+            count=1,
+            output_mode="libero",
+            enable_span_wrapping=False,
+            enable_image_inlining=True,
+        ),
+        idx=0,
+        lang="en",
+        title="T",
+    )
+
+    img_match = re.search(r"<img\b[^>]*>", rendered, re.IGNORECASE)
+    assert img_match is not None
+    img_tag = img_match.group(0)
+
+    assert 'src="https://example.com/image.png"' in img_tag
+    assert 'alt="Original alt"' in img_tag
+    assert not re.search(r"\bwidth\s*=", img_tag, re.IGNORECASE)
+    assert "data:image" not in rendered
+
+
 def test_build_variant_randomizes_only_img_width_for_all_output_modes(monkeypatch):
     monkeypatch.setattr(
         "fingerprintless_html_engine.variant.randomize_opt_for_variant",
@@ -118,7 +152,7 @@ def test_build_variant_randomizes_only_img_width_for_all_output_modes(monkeypatc
         lambda *args, **kwargs: ("", "", "", None),
     )
 
-    for output_mode in ("default", "strict", "super_strict", "libero"):
+    for output_mode in ("default", "strict", "super_strict"):
         rendered = build_variant(
             rng=random.Random(11),
             content_html='<img src="https://example.com/image.png">',
