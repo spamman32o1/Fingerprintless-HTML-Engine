@@ -91,6 +91,35 @@ def test_build_variant_keeps_ie_comments_in_strict_mode(monkeypatch):
     assert "<![endif]-->" in rendered
 
 
+def test_build_variant_randomizes_img_dimensions_for_all_output_modes(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+
+    for output_mode in ("default", "strict", "super_strict", "libero"):
+        rendered = build_variant(
+            rng=random.Random(11),
+            content_html='<img src="https://example.com/image.png">',
+            opt=Opt(count=1, output_mode=output_mode, enable_span_wrapping=False),
+            idx=0,
+            lang="en",
+            title="T",
+        )
+
+        img_match = re.search(r"<img\b[^>]*>", rendered, re.IGNORECASE)
+        assert img_match is not None
+        img_tag = img_match.group(0)
+
+        width_match = re.search(r"\bwidth\s*=\s*[\"']?(\d+)", img_tag, re.IGNORECASE)
+        height_match = re.search(r"\bheight\s*=\s*[\"']?(\d+)", img_tag, re.IGNORECASE)
+
+        assert width_match is not None
+        assert height_match is not None
+        assert 300 <= int(width_match.group(1)) <= 350
+        assert 200 <= int(height_match.group(1)) <= 250
+
+
 def test_build_variant_does_not_autofill_img_height_for_qr_alt(monkeypatch):
     monkeypatch.setattr(
         "fingerprintless_html_engine.variant.randomize_opt_for_variant",
