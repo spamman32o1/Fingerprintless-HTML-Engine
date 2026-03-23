@@ -11,6 +11,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from .constants import BODY_RE, HTML_LANG_RE, SKIP_TEXT_INSIDE, TAG_SPLIT_RE, TEMPLATE_SPLIT_RE, VOID_ELEMENTS
 from .models import _HtmlNode
+from .safe_css_utils import inline_safe_embedded_css
 from .tag_utils import normalize_input_html
 
 INLINE_TAGS = {
@@ -165,6 +166,10 @@ def extract_body_content(html_in: str) -> str:
     stripped = re.sub(r"(?is)</?html[^>]*>", "", stripped)
     stripped = re.sub(r"(?is)</?body[^>]*>", "", stripped)
     return stripped.strip()
+
+
+def extract_body_content_with_inline_safe_styles(html_in: str, *, strict_mode: bool = False) -> str:
+    return inline_safe_embedded_css(html_in, strict_mode=strict_mode)
 
 
 def sanitize_input_html(html_in: str) -> str:
