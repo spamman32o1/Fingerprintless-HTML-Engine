@@ -2,7 +2,12 @@ import warnings
 
 import pytest
 from fingerprintless_html_engine import html_utils
-from fingerprintless_html_engine.html_utils import encode_quoted_printable_html, extract_lang, minify_output_html
+from fingerprintless_html_engine.html_utils import (
+    encode_quoted_printable_html,
+    extract_body_content_with_inline_safe_styles,
+    extract_lang,
+    minify_output_html,
+)
 
 
 def test_encode_quoted_printable_html_wraps_and_preserves_crlf() -> None:
@@ -123,3 +128,40 @@ def test_extract_lang_warns_once_when_lingua_missing(monkeypatch) -> None:
         warnings.simplefilter("always")
         assert extract_lang(html_text) == "en"
     assert not record
+
+
+def test_extract_body_content_with_inline_safe_styles_preserves_supported_selectors() -> None:
+    html_text = (
+        "<html><head><style>"
+        "p{margin-top:4px;}"
+        ".message{color:#123456;}"
+        ".logo-wrap img{display:block;}"
+        "div > img{border:0;}"
+        "a:hover{text-decoration:none;}"
+        "</style></head>"
+        '<body><div class="message logo-wrap"><p style="font-weight:700">Hi</p><img src="x.png"></div></body></html>'
+    )
+
+    body_html = extract_body_content_with_inline_safe_styles(html_text, strict_mode=True)
+
+    assert '<div class="message logo-wrap" style="color:#123456;">' in body_html
+    assert '<p style="font-weight:700; margin-top:4px;">Hi</p>' in body_html
+    assert '<img src="x.png" style="display:block;">' in body_html
+    assert 'border:0' not in body_html
+    assert 'text-decoration:none' not in body_html
+
+
+def test_extract_body_content_with_inline_safe_styles_skips_unsafe_at_rules_and_values() -> None:
+    html_text = (
+        "<html><head><style>"
+        "@media screen {.message{color:red;}}"
+        ".message{background-image:url(javascript:alert(1));padding:8px;}"
+        "</style></head>"
+        '<body><div class="message">Hi</div></body></html>'
+    )
+
+    body_html = extract_body_content_with_inline_safe_styles(html_text, strict_mode=True)
+
+    assert '<div class="message" style="padding:8px;">Hi</div>' in body_html
+    assert 'javascript:' not in body_html
+    assert '@media' not in body_html
