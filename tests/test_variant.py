@@ -411,3 +411,71 @@ def test_build_variant_preserves_sized_img_layout_constraints_with_wrapper_noise
     assert 'style="display:block;width:20px"' in img_tag
     assert 'width="20"' in img_tag
     assert "margin-left" not in img_tag and "padding-right" not in img_tag
+
+
+def test_build_variant_inlines_supported_head_styles_for_body_content(monkeypatch):
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.randomize_opt_for_variant",
+        lambda rng, opt: opt,
+    )
+    monkeypatch.setattr(
+        "fingerprintless_html_engine.variant.random_css",
+        lambda *args, **kwargs: ("", "", "", None),
+    )
+
+    content_html = (
+        "<html><head><style>"
+        ".hero{color:#123456;margin-top:4px;}"
+        "#cta{background-color:#abcdef;position:fixed;}"
+        "p{font-weight:700;}"
+        "body .skip{display:none;}"
+        "</style></head>"
+        '<body><p class="hero">Hello</p><a id="cta">Go</a></body></html>'
+    )
+
+    rendered = build_variant(
+        rng=random.Random(11),
+        content_html=content_html,
+        opt=Opt(count=1, output_mode="strict", enable_span_wrapping=False),
+        idx=0,
+        lang="en",
+        title="T",
+    )
+
+    assert re.search(r'<p[^>]*style="[^"]*color:#123456;[^"]*margin-top:4px;[^"]*font-weight:700;', rendered)
+    assert re.search(r'<a[^>]*id="cta"[^>]*style="[^"]*background-color:#abcdef;', rendered)
+    assert "position:fixed" not in rendered
+    assert "display:none" not in rendered
+    assert rendered.count("<head>") == 1
+
+
+def test_cli_passes_full_sanitized_document_to_build_variant(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    input_file = tmp_path / "input.html"
+    raw_html = '<html><!--comment--><head><style>.hero{color:red;}</style></head><body><p class="hero">Hi</p></body></html>'
+    input_file.write_text(raw_html, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    captured = {}
+
+    def fake_build_variant(_rng, content_html, *args, **kwargs):
+        captured["content_html"] = content_html
+        return "<html><body>Variant</body></html>"
+
+    import fingerprintless_html_engine.cli as cli
+
+    monkeypatch.setattr(cli, "_collect_input_files", lambda: [input_file])
+    monkeypatch.setattr(cli, "prompt_int", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(cli, "_prompt_yes_no", lambda *args, **kwargs: False)
+    monkeypatch.setattr(cli, "_prompt_output_mode", lambda: "default")
+    monkeypatch.setattr(cli, "read_text_with_fallback", lambda *args, **kwargs: raw_html)
+    monkeypatch.setattr(cli, "build_variant", fake_build_variant)
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "")
+    monkeypatch.setattr("sys.argv", ["prog"])
+
+    cli.main()
+
+    assert "<head><style>.hero{color:red;}</style></head>" in captured["content_html"]
+    assert "<!--comment-->" not in captured["content_html"]

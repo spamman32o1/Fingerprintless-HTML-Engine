@@ -13,7 +13,7 @@ from .css_utils import (
     random_css,
 )
 from .image_utils import RemoteImageCache, inline_image_references
-from .html_utils import minify_output_html
+from .html_utils import extract_body_content, minify_output_html
 from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
 from .noise_utils import ie_noise_block, meta_noise, noise_divs
@@ -21,6 +21,7 @@ from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
 from .structure_utils import randomize_structure, wrap_content_boxes
 from .tag_utils import (
     _parse_tag_attrs,
+    apply_inline_styles,
     is_strict_output_mode,
     normalize_input_html,
     replace_cellspacing_with_css,
@@ -29,6 +30,182 @@ from .text_utils import span_wrap_html
 
 
 START_TAG_RE = re.compile(r"<([a-zA-Z0-9:_-]+)([^>]*)>", re.IGNORECASE)
+
+
+STYLE_BLOCK_RE = re.compile(r"(?is)<style[^>]*>(.*?)</style>")
+HEAD_RE = re.compile(r"(?is)<head[^>]*>(.*?)</head>")
+RULE_RE = re.compile(r"(?is)([^{}]+)\{([^{}]+)\}")
+TAG_TOKEN_RE = re.compile(r"(?is)<(/?)([a-zA-Z0-9:_-]+)([^>]*)>")
+_SIMPLE_SELECTOR_PART_RE = re.compile(r"(^[a-zA-Z][a-zA-Z0-9_-]*|[.#][a-zA-Z_][a-zA-Z0-9_-]*)")
+_UNSAFE_STYLE_VALUE_RE = re.compile(r"(?i)(expression\s*\(|javascript\s*:|vbscript\s*:|-moz-binding|behavior\s*:|@import)")
+_ALLOWED_STRICT_STYLE_PROPS = {
+    "background",
+    "background-color",
+    "border",
+    "border-bottom",
+    "border-bottom-color",
+    "border-bottom-style",
+    "border-bottom-width",
+    "border-collapse",
+    "border-color",
+    "border-left",
+    "border-left-color",
+    "border-left-style",
+    "border-left-width",
+    "border-radius",
+    "border-right",
+    "border-right-color",
+    "border-right-style",
+    "border-right-width",
+    "border-spacing",
+    "border-style",
+    "border-top",
+    "border-top-color",
+    "border-top-style",
+    "border-top-width",
+    "border-width",
+    "color",
+    "display",
+    "font",
+    "font-family",
+    "font-size",
+    "font-style",
+    "font-variant",
+    "font-weight",
+    "height",
+    "letter-spacing",
+    "line-height",
+    "list-style",
+    "list-style-position",
+    "list-style-type",
+    "margin",
+    "margin-bottom",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "max-width",
+    "min-height",
+    "min-width",
+    "padding",
+    "padding-bottom",
+    "padding-left",
+    "padding-right",
+    "padding-top",
+    "text-align",
+    "text-decoration",
+    "text-indent",
+    "text-transform",
+    "white-space",
+    "width",
+}
+
+
+def _extract_head_style_blocks(html_in: str) -> list[str]:
+    head_match = HEAD_RE.search(html_in)
+    if not head_match:
+        return []
+    return [match.group(1) for match in STYLE_BLOCK_RE.finditer(head_match.group(1))]
+
+
+def _parse_selector_signature(selector: str) -> tuple[str | None, str | None, tuple[str, ...]] | None:
+    selector = selector.strip()
+    if not selector or any(token in selector for token in (" ", ">", "+", "~", "[", ":", "*")):
+        return None
+    parts = _SIMPLE_SELECTOR_PART_RE.findall(selector)
+    if not parts or "".join(parts) != selector:
+        return None
+
+    tag_name: str | None = None
+    id_name: str | None = None
+    class_names: list[str] = []
+    for part in parts:
+        if part.startswith("."):
+            class_names.append(part[1:].lower())
+        elif part.startswith("#"):
+            if id_name is not None:
+                return None
+            id_name = part[1:]
+        else:
+            if tag_name is not None:
+                return None
+            tag_name = part.lower()
+    return tag_name, id_name, tuple(class_names)
+
+
+def _sanitize_author_declarations(declarations: str, *, strict_mode: bool) -> list[tuple[str, str]]:
+    parsed = parse_inline_style_declarations(declarations)
+    sanitized: list[tuple[str, str]] = []
+    for prop, value in parsed.items():
+        prop_name = prop.strip().lower()
+        prop_value = value.strip()
+        if not prop_name or not prop_value:
+            continue
+        if _UNSAFE_STYLE_VALUE_RE.search(prop_value):
+            continue
+        if strict_mode and prop_name not in _ALLOWED_STRICT_STYLE_PROPS:
+            continue
+        sanitized.append((prop_name, prop_value))
+    return sanitized
+
+
+def _extract_author_style_rules(document_html: str, *, strict_mode: bool) -> list[tuple[tuple[str | None, str | None, tuple[str, ...]], list[tuple[str, str]]]]:
+    rules: list[tuple[tuple[str | None, str | None, tuple[str, ...]], list[tuple[str, str]]]] = []
+    for style_block in _extract_head_style_blocks(document_html):
+        css_text = re.sub(r"/\*.*?\*/", "", style_block, flags=re.DOTALL)
+        for selector_text, declarations in RULE_RE.findall(css_text):
+            if "@" in selector_text:
+                continue
+            sanitized = _sanitize_author_declarations(declarations, strict_mode=strict_mode)
+            if not sanitized:
+                continue
+            for selector in selector_text.split(','):
+                signature = _parse_selector_signature(selector)
+                if signature is None:
+                    continue
+                rules.append((signature, sanitized))
+    return rules
+
+
+def _tag_matches_selector(tag_name: str, attrs: list[tuple[str, str, str | None]], selector: tuple[str | None, str | None, tuple[str, ...]]) -> bool:
+    selector_tag, selector_id, selector_classes = selector
+    if selector_tag and selector_tag != tag_name.lower():
+        return False
+
+    attr_map = {name.lower(): value or "" for name, _raw, value in attrs}
+    if selector_id and attr_map.get("id") != selector_id:
+        return False
+    if selector_classes:
+        class_tokens = {token.lower() for token in attr_map.get("class", "").split() if token}
+        if any(class_name not in class_tokens for class_name in selector_classes):
+            return False
+    return True
+
+
+def _inline_safe_author_styles(document_html: str, *, strict_mode: bool) -> str:
+    body_html = extract_body_content(document_html)
+    style_rules = _extract_author_style_rules(document_html, strict_mode=strict_mode)
+    if not style_rules:
+        return body_html
+
+    result: list[str] = []
+    last_end = 0
+    for match in TAG_TOKEN_RE.finditer(body_html):
+        result.append(body_html[last_end:match.start()])
+        last_end = match.end()
+        slash, tag_name, attr_text = match.groups()
+        tag_text = match.group(0)
+        if slash or tag_text.startswith("<!") or tag_text.startswith("<?"):
+            result.append(tag_text)
+            continue
+        attrs = _parse_tag_attrs(attr_text.strip().rstrip('/'))
+        additions: list[tuple[str, str]] = []
+        for selector, declarations in style_rules:
+            if _tag_matches_selector(tag_name, attrs, selector):
+                additions.extend(declarations)
+        result.append(apply_inline_styles(tag_text, additions) if additions else tag_text)
+
+    result.append(body_html[last_end:])
+    return "".join(result)
 
 
 def _extract_colors_from_attrs(
@@ -179,6 +356,7 @@ def build_variant(
     strict_mode = is_strict_output_mode(opt.output_mode)
     super_strict = opt.output_mode in {"super_strict", "libero"}
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
+    content_html = _inline_safe_author_styles(content_html, strict_mode=strict_mode)
     content_html = inline_image_references(
         content_html,
         enabled=opt.enable_image_inlining and opt.output_mode != "libero",

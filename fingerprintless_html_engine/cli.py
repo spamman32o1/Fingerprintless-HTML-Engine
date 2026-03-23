@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-from .html_utils import encode_quoted_printable_html, extract_body_content, extract_lang, sanitize_input_html
+from .html_utils import encode_quoted_printable_html, extract_lang, sanitize_input_html
 from .image_utils import RemoteImageCache
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
@@ -549,7 +549,6 @@ def main() -> None:
     for input_path in input_paths:
         raw_html = read_text_with_fallback(input_path, input_encoding)
         sanitized = sanitize_input_html(raw_html)
-        content = extract_body_content(sanitized)
         lang = extract_lang(sanitized, fallback_lang="it" if opt.output_mode == "libero" else "en")
 
         if output_path_mode == "different":
@@ -564,7 +563,7 @@ def main() -> None:
             variant_title = random_title()
             variant = build_variant(
                 rng,
-                content,
+                sanitized,
                 opt,
                 i,
                 lang,
