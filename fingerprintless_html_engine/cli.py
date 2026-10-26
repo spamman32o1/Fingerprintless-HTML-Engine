@@ -195,6 +195,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable reuse of downloaded remote image payloads across references within a run.",
     )
     parser.add_argument(
+        "--no-image-pixel-jitter",
+        action="store_false",
+        dest="enable_image_pixel_jitter",
+        help=(
+            "Disable imperceptible image pixel noise, which makes each inlined "
+            "image payload unique per variant (requires Pillow; silently skipped "
+            "when Pillow is not installed)."
+        ),
+    )
+    parser.add_argument(
         "--pretty-output",
         action="store_true",
         dest="pretty_output",
@@ -264,6 +274,7 @@ def _build_parser() -> argparse.ArgumentParser:
         structure_randomize=True,
         enable_image_inlining=True,
         enable_remote_image_cache=True,
+        enable_image_pixel_jitter=True,
     )
     return parser
 
@@ -488,6 +499,7 @@ def main() -> None:
         enable_body_styles=args.enable_body_styles,
         enable_image_inlining=args.enable_image_inlining,
         enable_remote_image_cache=args.enable_remote_image_cache,
+        enable_image_pixel_jitter=args.enable_image_pixel_jitter,
         disable_layout_tables=args.disable_layout_tables,
         disable_wrapper_styles=args.disable_wrapper_styles,
         pretty_output=pretty_output,

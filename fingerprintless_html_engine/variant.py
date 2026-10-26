@@ -16,7 +16,11 @@ from .css_utils import (
     prepare_source_colors,
     random_css,
 )
-from .image_utils import RemoteImageCache, inline_image_references
+from .image_utils import (
+    RemoteImageCache,
+    inline_image_references,
+    jitter_image_references,
+)
 from .html_utils import extract_body_content_with_inline_safe_styles, minify_output_html
 from .models import Opt
 from .noise_utils import ie_noise_block
@@ -337,11 +341,21 @@ def build_variant(
     content_html = inline_image_references(
         content_html,
         enabled=opt.enable_image_inlining and opt.output_mode != "libero",
+        # The cache is per variant when pixel jitter is on: a shared cache would
+        # hand every variant the same stored payload for the same remote URL.
         cache=(
             image_cache
-            if opt.enable_remote_image_cache
+            if opt.enable_remote_image_cache and not opt.enable_image_pixel_jitter
             else RemoteImageCache(enabled=False)
         ),
+    )
+    # Jitter after inlining so freshly downloaded payloads are covered, and
+    # before any downstream step can copy the tag, so every insertion site
+    # within this variant carries a unique base64 string.
+    content_html = jitter_image_references(
+        content_html,
+        rng,
+        enabled=opt.enable_image_pixel_jitter and opt.output_mode != "libero",
     )
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(

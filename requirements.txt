@@ -1,4 +1,8 @@
-# Synonym generation talks to a local Ollama daemon over HTTP; no Python
-# dependencies are required. Start the daemon with:
+# Synonym generation talks to a local Ollama daemon over HTTP. Start it with:
 #   docker compose up -d ollama && docker compose run --rm ollama-pull
 # See README.md ("Synonym generation") for model recommendations.
+
+# Optional: imperceptible image pixel jitter, so each inlined image payload is
+# a unique base64 string. Without it, images are still inlined but payloads
+# repeat across variants.
+pillow>=10.0

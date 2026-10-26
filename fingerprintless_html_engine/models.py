@@ -37,6 +37,7 @@ class Opt:
     enable_body_styles: bool = True
     enable_image_inlining: bool = True
     enable_remote_image_cache: bool = True
+    enable_image_pixel_jitter: bool = True
     disable_layout_tables: bool = False
     disable_wrapper_styles: bool = False
     pretty_output: bool = False
