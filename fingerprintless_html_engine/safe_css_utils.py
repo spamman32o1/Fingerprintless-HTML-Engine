@@ -234,12 +234,12 @@ def _selector_matches(tag: _TagContext, ancestors: list[_TagContext], selector: 
     return True
 
 
-def inline_safe_embedded_css(document_html: str, *, strict_mode: bool) -> str:
-    body_html = _extract_body_html(document_html)
-    style_rules = _extract_safe_css_rules(document_html, strict_mode=strict_mode)
-    if not style_rules:
-        return body_html
-
+def _inline_style_rules(
+    body_html: str,
+    style_rules: list[tuple[tuple[_SimpleSelector, ...], list[tuple[str, str]]]],
+    *,
+    jitter=None,
+) -> str:
     result: list[str] = []
     last_end = 0
     open_tags: list[_TagContext] = []
@@ -268,6 +268,20 @@ def inline_safe_embedded_css(document_html: str, *, strict_mode: bool) -> str:
         for selector, declarations in style_rules:
             if _selector_matches(current_tag, open_tags, selector):
                 additions.extend(declarations)
+        attrs_map = {name.lower(): value or "" for name, _raw, value in attrs}
+        source_style = attrs_map.get("style", "")
+        authored = parse_inline_style_declarations(source_style)
+        additions = [(name, value) for name, value in additions if name not in authored]
+        for name, _raw, value in attrs:
+            if value and name.lower() in {"color", "text", "bgcolor", "face"}:
+                prop = "background-color" if name.lower() == "bgcolor" else ("font-family" if name.lower() == "face" else "color")
+                if prop not in authored:
+                    additions.append((prop, value))
+        if jitter is not None:
+            additions = jitter(additions)
+            if source_style:
+                jittered_source = jitter(tuple(authored.items()))
+                tag_text = apply_inline_styles(tag_text, jittered_source, replace_existing=True)
         result.append(apply_inline_styles(tag_text, additions) if additions else tag_text)
 
         is_self_closing = tag_text.rstrip().endswith("/>") or tag_name in VOID_ELEMENTS
@@ -276,3 +290,19 @@ def inline_safe_embedded_css(document_html: str, *, strict_mode: bool) -> str:
 
     result.append(body_html[last_end:])
     return "".join(result)
+
+
+def inline_safe_embedded_css(document_html: str, *, strict_mode: bool, jitter=None) -> str:
+    return _inline_style_rules(
+        _extract_body_html(document_html),
+        _extract_safe_css_rules(document_html, strict_mode=strict_mode),
+        jitter=jitter,
+    )
+
+
+def source_css_rules(document_html: str) -> list[tuple[str, tuple[tuple[str, str], ...]]]:
+    return [
+        (" ".join(part.tag_name or "" for part in selector),
+         tuple(declarations))
+        for selector, declarations in _extract_safe_css_rules(document_html, strict_mode=False)
+    ]

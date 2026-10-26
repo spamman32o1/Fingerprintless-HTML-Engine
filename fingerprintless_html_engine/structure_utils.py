@@ -91,26 +91,6 @@ def _parse_html_nodes(html_in: str) -> _HtmlNode:
     return root
 
 
-def _shuffle_safe_siblings(rng: random.Random, node: _HtmlNode) -> None:
-    if node.tag in SKIP_TEXT_INSIDE:
-        return
-
-    shuffle_indices = [
-        idx
-        for idx, child in enumerate(node.children)
-        if child.tag is not None and _is_safe_wrapper(child.open_tag, child.tag)
-    ]
-    if len(shuffle_indices) > 1:
-        shuffled = [node.children[idx] for idx in shuffle_indices]
-        rng.shuffle(shuffled)
-        for idx, child in zip(shuffle_indices, shuffled):
-            node.children[idx] = child
-
-    for child in node.children:
-        if child.tag is not None:
-            _shuffle_safe_siblings(rng, child)
-
-
 def _maybe_wrap_child(rng: random.Random, child: _HtmlNode) -> _HtmlNode:
     if child.tag is not None and child.tag in SKIP_TEXT_INSIDE:
         return child
@@ -162,8 +142,7 @@ def _mutate_safe_structure(rng: random.Random, node: _HtmlNode) -> None:
     if node.tag in SKIP_TEXT_INSIDE:
         return
 
-    _shuffle_safe_siblings(rng, node)
-
+    # Keep authored sibling order; randomizing it can change email meaning.
     idx = 0
     while idx < len(node.children):
         child = node.children[idx]

@@ -1,0 +1,36 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fingerprintless-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # One-shot: pulls the synonym model, then exits. The engine talks to `ollama`;
+  # this service only makes the first run self-setup.
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: fingerprintless-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${SYNONYM_MODEL:-qwen2.5:3b}"]
+    restart: "no"
+
+volumes:
+  ollama-models:
+    # Fixed name so the downloaded models survive `docker compose down` and match
+    # the volume the engine was set up with. Without this, compose would create a
+    # fresh empty volume and re-download every model.
+    name: fl-ollama-models

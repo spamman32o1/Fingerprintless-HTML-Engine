@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import random
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, List
 from urllib.error import URLError
 from urllib.parse import unquote, urlsplit
 from urllib.request import Request, urlopen
+
+from .tag_utils import _parse_tag_attrs
 
 
 _IMG_SRC_RE = re.compile(
@@ -150,3 +153,89 @@ def inline_image_references(
     cache: RemoteImageCache | None = None,
 ) -> str:
     return ImageInliner(cache=cache).inline_html(html_text, enabled=enabled)
+
+
+_TAG_ATTR_RE = re.compile(r"^<\s*([a-zA-Z0-9:_-]+)([^>]*)>$")
+
+
+def _extract_px_style_value(style_value: str | None, prop: str) -> str | None:
+    if not style_value:
+        return None
+    match = re.search(
+        rf"{re.escape(prop)}\s*:\s*([0-9]+(?:\.[0-9]+)?)px", style_value, re.IGNORECASE
+    )
+    if not match:
+        return None
+    value = match.group(1)
+    if "." in value:
+        value = value.rstrip("0").rstrip(".")
+    return value or "0"
+
+
+def _add_attr_if_missing(tag: str, attr_name: str, attr_value: str) -> str:
+    if (
+        not tag.startswith("<")
+        or tag.startswith("</")
+        or tag.startswith("<!")
+        or tag.startswith("<?")
+    ):
+        return tag
+
+    m = _TAG_ATTR_RE.match(tag)
+    if not m:
+        return tag
+
+    name, rest = m.group(1), m.group(2)
+    trailing_slash = rest.rstrip().endswith("/")
+    rest = rest.rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    if any(parsed_name.lower() == attr_name.lower() for parsed_name, _, _ in attrs):
+        return tag
+
+    updated_attrs = [raw for _, raw, _ in attrs]
+    updated_attrs.append(f'{attr_name}="{attr_value}"')
+
+    attr_str = " ".join(updated_attrs).strip()
+    slash = " /" if trailing_slash else ""
+    if attr_str:
+        return f"<{name} {attr_str}{slash}>"
+    return f"<{name}{slash}>"
+
+
+def apply_image_noise(
+    rng: random.Random,
+    tag: str,
+    *,
+    output_mode: str,
+    open_tag_stack: List[str],
+) -> str:
+    """Apply fingerprint noise to a single ``<img>`` tag.
+
+    Returns the tag untouched when it cannot be parsed or when ``libero`` mode
+    forbids image mutation.
+    """
+    attr_match = _TAG_ATTR_RE.match(tag)
+    if not attr_match:
+        return tag
+
+    rest = attr_match.group(2).rstrip().rstrip("/")
+    attrs = _parse_tag_attrs(rest.strip())
+    if not attrs and rest.strip():
+        return tag
+
+    if output_mode == "libero":
+        return tag
+
+    has_width = any(name.lower() == "width" for name, _, _ in attrs)
+    if not has_width:
+        style_value = next(
+            (value for name, _, value in attrs if name.lower() == "style"), None
+        )
+        width_value = _extract_px_style_value(style_value, "width")
+        if width_value is not None:
+            tag = _add_attr_if_missing(tag, "width", width_value)
+
+    return tag

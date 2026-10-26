@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import random
+import re
 
-from .constants import BG_COLORS, FONT_FAMILY_POOLS, TEXT_COLORS, VARIABLE_FONT_FAMILIES
+from .constants import FONT_FAMILY_POOLS, VARIABLE_FONT_FAMILIES
 from .random_utils import maybe, pick, rfloat
 from .tag_utils import is_strict_output_mode
 
@@ -69,6 +70,14 @@ class SourceColorContext:
     source_bg_color: str | None = None
     dominant_text_candidates: tuple[str, ...] = tuple()
     dominant_bg_candidates: tuple[str, ...] = tuple()
+    accent_candidates: tuple[str, ...] = tuple()
+    gradient_candidates: tuple[str, ...] = tuple()
+    overlay_candidates: tuple[str, ...] = tuple()
+    body_styles: tuple[tuple[str, str], ...] = tuple()
+    wrapper_styles: tuple[tuple[str, str], ...] = tuple()
+    element_styles: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = tuple()
+    has_source_styles: bool = False
+    color_variants: tuple[tuple[str, str], ...] = field(default_factory=tuple, compare=False)
 
 
 def parse_inline_style_declarations(style_value: str | None) -> dict[str, str]:
@@ -88,11 +97,13 @@ def parse_inline_style_declarations(style_value: str | None) -> dict[str, str]:
 
 def _normalize_hex_color(value: str) -> str | None:
     value = value.strip().lstrip("#")
-    if len(value) == 3 and all(ch in "0123456789abcdefABCDEF" for ch in value):
-        return "#" + "".join(ch * 2 for ch in value).lower()
-    if len(value) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in value):
-        return f"#{value.lower()}"
-    return None
+    if len(value) not in {3, 4, 6, 8} or not all(ch in "0123456789abcdefABCDEF" for ch in value):
+        return None
+    if len(value) in {3, 4}:
+        value = "".join(ch * 2 for ch in value)
+    if len(value) == 8 and value[6:] == "ff":
+        value = value[:6]
+    return f"#{value.lower()}"
 
 
 def _parse_rgb_channel(value: str) -> int | None:
@@ -108,35 +119,263 @@ def _parse_rgb_channel(value: str) -> int | None:
         return None
 
 
+def _split_color_parts(value: str) -> list[str]:
+    function_body = value[value.find("(") + 1 : -1].strip()
+    if "," in function_body:
+        return [part.strip() for part in function_body.split(",")]
+    return [part for part in re.split(r"\s+|/", function_body) if part]
+
+
+def _parse_alpha(value: str) -> float | None:
+    try:
+        alpha = float(value[:-1]) / 100 if value.endswith("%") else float(value)
+    except ValueError:
+        return None
+    return max(0.0, min(1.0, alpha))
+
+
+def _parse_hsl_color(value: str) -> str | None:
+    parts = _split_color_parts(value)
+    if len(parts) not in {3, 4}:
+        return None
+    try:
+        hue = float(parts[0].removesuffix("deg")) % 360 / 360
+        saturation = float(parts[1].removesuffix("%")) / 100
+        lightness = float(parts[2].removesuffix("%")) / 100
+    except ValueError:
+        return None
+    if not 0 <= saturation <= 1 or not 0 <= lightness <= 1:
+        return None
+    import colorsys
+
+    channels = colorsys.hls_to_rgb(hue, lightness, saturation)
+    return "#" + "".join(f"{round(channel * 255):02x}" for channel in channels)
+
+
 def parse_color_value(value: str | None) -> str | None:
     if not value:
         return None
     value = value.strip().lower()
-    if value in {"", "inherit", "initial", "transparent", "unset", "currentcolor", "none"}:
+    if value in {"", "inherit", "initial", "unset", "currentcolor", "none"}:
         return None
+    if value == "transparent":
+        return "#00000000"
     if value.startswith("#"):
         return _normalize_hex_color(value)
     if value in COLOR_NAME_MAP:
         return COLOR_NAME_MAP[value]
-    if value.startswith("rgb(") and value.endswith(")"):
-        channels = [_parse_rgb_channel(part) for part in value[4:-1].split(",")]
-        if len(channels) != 3 or any(channel is None for channel in channels):
+    if value.startswith(("rgb(", "rgba(")) and value.endswith(")"):
+        parts = _split_color_parts(value)
+        if len(parts) not in {3, 4}:
             return None
-        return "#" + "".join(f"{channel:02x}" for channel in channels if channel is not None)
-    if value.startswith("rgba(") and value.endswith(")"):
-        parts = [part.strip() for part in value[5:-1].split(",")]
-        if len(parts) != 4:
-            return None
-        try:
-            if float(parts[3]) <= 0:
-                return None
-        except ValueError:
+        alpha = _parse_alpha(parts[3]) if len(parts) == 4 else 1.0
+        if alpha is None:
             return None
         channels = [_parse_rgb_channel(part) for part in parts[:3]]
         if any(channel is None for channel in channels):
             return None
-        return "#" + "".join(f"{channel:02x}" for channel in channels if channel is not None)
+        normalized = "#" + "".join(f"{channel:02x}" for channel in channels if channel is not None)
+        return normalized if alpha >= 1.0 else normalized + f"{round(alpha * 255):02x}"
+    if value.startswith(("hsl(", "hsla(")) and value.endswith(")"):
+        normalized = _parse_hsl_color(value)
+        parts = _split_color_parts(value)
+        if normalized and len(parts) == 4:
+            alpha = _parse_alpha(parts[3])
+            if alpha is None:
+                return None
+            if alpha < 1.0:
+                normalized += f"{round(alpha * 255):02x}"
+        return normalized
     return None
+
+
+def _color_to_rgba(value: str | None) -> tuple[int, int, int, float] | None:
+    if not value:
+        return None
+    color = value.strip().lower()
+    normalized = parse_color_value(color)
+    if not normalized:
+        return None
+    rgb = tuple(int(normalized[index:index + 2], 16) for index in (1, 3, 5))
+    alpha = 0.0 if color == "transparent" else 1.0
+    if color.startswith(("rgba(", "hsla(")):
+        parts = _split_color_parts(color)
+        if len(parts) == 4:
+            alpha = _parse_alpha(parts[3])
+            if alpha is None:
+                return None
+    elif color.startswith("#") and len(color) == 5:
+        alpha = int(color[4] * 2, 16) / 255
+    elif color.startswith("#") and len(color) == 9:
+        alpha = int(color[7:9], 16) / 255
+    elif color.startswith(("rgb(", "hsl(")):
+        parts = _split_color_parts(color)
+        if len(parts) == 4:
+            alpha = _parse_alpha(parts[3])
+            if alpha is None:
+                return None
+    return (*rgb, alpha)
+
+
+def _format_rgba(red: int, green: int, blue: int, alpha: float = 1.0) -> str:
+    if alpha >= 0.9995:
+        return f"#{red:02x}{green:02x}{blue:02x}"
+    alpha_text = f"{alpha:.6f}".rstrip("0").rstrip(".")
+    return f"rgba({red},{green},{blue},{alpha_text})"
+
+
+def jitter_color(
+    value: str | None,
+    rng: random.Random | None,
+    *,
+    max_delta: int = 3,
+    enabled: bool = True,
+) -> str | None:
+    """Perturb a source color, never its hue family or text opacity."""
+    if value is None or not enabled or rng is None:
+        return value
+    rgba = _color_to_rgba(value)
+    if rgba is None:
+        return value
+    red, green, blue, alpha = rgba
+    channels = [
+        max(0, min(255, channel + rng.randint(-max_delta, max_delta)))
+        for channel in (red, green, blue)
+    ]
+    # Opacity is an authored readability/contrast decision; retain it exactly.
+    if value.strip().lower().startswith("#") and len(value.strip()) in {5, 9}:
+        return "#" + "".join(f"{channel:02x}" for channel in channels) + value.strip()[-2:]
+    return _format_rgba(*channels, alpha)
+
+
+def color_with_alpha(value: str, alpha: float) -> str:
+    rgba = _color_to_rgba(value) or (127, 127, 127, 1.0)
+    return _format_rgba(*rgba[:3], max(0.0, min(1.0, alpha)))
+
+
+_HEX_COLOR_RE = re.compile(r"(?i)(?<![\w-])#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])")
+_COLOR_FUNCTION_RE = re.compile(r"(?i)(?<![\w-])((?:rgba?|hsla?)\([^()]*\))")
+_COLOR_NAME_RE = re.compile(
+    r"(?i)(?<![\w-])(" + "|".join(map(re.escape, COLOR_NAME_MAP)) + r")(?![\w-])"
+)
+_CSS_NUMBER_RE = re.compile(
+    r"(?<![\w.#])-?(?:\d+(?:\.\d+)?|\.\d+)(px|pt|pc|em|rem|ex|ch|vw|vh|vmin|vmax|%|deg|ms|s)?(?![\w%])"
+)
+_PRESERVED_DECLARATIONS = {
+    "animation", "animation-name", "content", "cursor", "display", "flex",
+    "font-family", "font-feature-settings", "font-kerning", "font-optical-sizing",
+    "font-style", "font-variant", "font-variation-settings", "font-weight",
+    "list-style-type", "opacity", "order", "position", "text-rendering",
+    "text-transform", "transition", "transition-property", "z-index",
+}
+
+
+def _format_number(value: float) -> str:
+    return f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+
+
+def jitter_css_value(
+    value: str,
+    rng: random.Random | None,
+    *,
+    property_name: str = "",
+    enabled: bool = True,
+    jitter_colors: bool = True,
+) -> str:
+    """Jitter source colors and measurements while leaving URLs and keywords intact."""
+    if not enabled or rng is None or not value or "url(" in value.lower() or "var(" in value.lower():
+        return value
+    prop = property_name.lower()
+    if prop in _PRESERVED_DECLARATIONS or prop.startswith("--"):
+        return value
+    if prop in {"color", "background-color", "border-color", "outline-color", "text-decoration-color"}:
+        return (jitter_color(value, rng) or value) if jitter_colors else value
+
+    def replace_color(match: re.Match[str]) -> str:
+        return jitter_color(match.group(0), rng) or match.group(0)
+
+    updated = value
+    if jitter_colors:
+        updated = _HEX_COLOR_RE.sub(replace_color, updated)
+        updated = _COLOR_FUNCTION_RE.sub(replace_color, updated)
+        updated = _COLOR_NAME_RE.sub(replace_color, updated)
+
+    protected_tokens: dict[str, str] = {}
+
+    def protect_color(match: re.Match[str]) -> str:
+        token = f"__source_color_{len(protected_tokens)}__"
+        protected_tokens[token] = match.group(0)
+        return token
+
+    # Mapped rgba()/hex tokens must not be mistaken for geometry on a later pass.
+    protected = _COLOR_FUNCTION_RE.sub(protect_color, updated)
+    protected = _HEX_COLOR_RE.sub(protect_color, protected)
+
+    def replace_number(match: re.Match[str]) -> str:
+        number = float(match.group(0).removesuffix(match.group(1) or ""))
+        unit = match.group(1) or ""
+        if number == 0 or not unit:
+            # Unitless values often encode flex, counts, ratios, or identifiers.
+            return match.group(0)
+        delta = min(0.35, abs(number) * 0.01) if unit in {"px", "pt", "pc"} else abs(number) * 0.005
+        if unit == "deg":
+            delta = 0.5
+        if unit == "%" and (number <= 1 or number >= 99):
+            return match.group(0)
+        jittered = rfloat(rng, number - delta, number + delta, 3)
+        if number > 0:
+            jittered = max(0.0, jittered)
+        return f"{_format_number(jittered)}{unit}"
+
+    protected = _CSS_NUMBER_RE.sub(replace_number, protected)
+    for token, color in protected_tokens.items():
+        protected = protected.replace(token, color)
+    return protected
+
+
+def jitter_declarations(
+    declarations: tuple[tuple[str, str], ...] | list[tuple[str, str]],
+    rng: random.Random | None,
+    *,
+    enabled: bool = True,
+    color_enabled: bool | None = None,
+    source_color_context: SourceColorContext | None = None,
+    color_variants: dict[str, str] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    color_enabled = enabled if color_enabled is None else color_enabled
+    variants = dict(source_color_context.color_variants) if source_color_context else {}
+    if color_variants is not None:
+        variants.update(color_variants)
+
+    def map_colors(value: str) -> str:
+        def replace(match: re.Match[str]) -> str:
+            original = parse_color_value(match.group(0)) or ""
+            if original not in variants:
+                variants[original] = jitter_color(match.group(0), rng) or match.group(0)
+            return variants[original]
+
+        updated = _HEX_COLOR_RE.sub(replace, value)
+        updated = _COLOR_FUNCTION_RE.sub(replace, updated)
+        return _COLOR_NAME_RE.sub(replace, updated)
+
+    return tuple(
+        (
+            name,
+            jitter_css_value(
+                map_colors(value) if color_enabled else value,
+                rng,
+                property_name=name,
+                enabled=enabled,
+                # Mapping has already perturbed every recognized color once.
+                jitter_colors=False,
+            ),
+        )
+        for name, value in declarations
+    )
+
+
+def declarations_text(declarations: tuple[tuple[str, str], ...] | list[tuple[str, str]]) -> str:
+    return "".join(f"{name}:{value};" for name, value in declarations)
 
 
 def _hex_to_rgb(color: str | None) -> tuple[int, int, int] | None:
@@ -150,21 +389,20 @@ def _relative_luminance(color: str | None) -> float | None:
     rgb = _hex_to_rgb(color)
     if rgb is None:
         return None
-    channels: list[float] = []
-    for value in rgb:
-        srgb = value / 255
-        channels.append(srgb / 12.92 if srgb <= 0.03928 else ((srgb + 0.055) / 1.055) ** 2.4)
-    red, green, blue = channels
+    def linearize(channel: int) -> float:
+        value = channel / 255.0
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    red, green, blue = (linearize(channel) for channel in rgb)
     return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
 
-def contrast_ratio(color_a: str | None, color_b: str | None) -> float:
-    luminance_a = _relative_luminance(color_a)
-    luminance_b = _relative_luminance(color_b)
-    if luminance_a is None or luminance_b is None:
-        return 0.0
-    lighter = max(luminance_a, luminance_b)
-    darker = min(luminance_a, luminance_b)
+def contrast_ratio(first: str | None, second: str | None) -> float:
+    first_luminance = _relative_luminance(first)
+    second_luminance = _relative_luminance(second)
+    if first_luminance is None or second_luminance is None:
+        return 21.0
+    lighter = max(first_luminance, second_luminance)
+    darker = min(first_luminance, second_luminance)
     return (lighter + 0.05) / (darker + 0.05)
 
 
@@ -176,7 +414,146 @@ def _is_light_color(color: str | None) -> bool | None:
 
 
 def _safe_text_for_bg(bg_color: str | None) -> str:
-    return "#111827" if _is_light_color(bg_color) is not False else "#f9fafb"
+    return "#111111" if _is_light_color(bg_color) is not False else "#f5f5f5"
+
+
+def prepare_source_colors(
+    source_color_context: SourceColorContext,
+    rng: random.Random | None,
+    *,
+    enabled: bool = True,
+    color_variants: dict[str, str] | None = None,
+) -> SourceColorContext:
+    """Build one coordinated color mutation map for the entire variant."""
+    raw_colors = (
+        source_color_context.source_text_color,
+        source_color_context.source_bg_color,
+        *source_color_context.dominant_text_candidates,
+        *source_color_context.dominant_bg_candidates,
+        *source_color_context.accent_candidates,
+    )
+    raw_colors += tuple(
+        raw_color
+        for declarations in (
+            source_color_context.body_styles,
+            source_color_context.wrapper_styles,
+            *(styles for _, styles in source_color_context.element_styles),
+        )
+        for _, value in declarations
+        for raw_color in _gradient_color_values(value)
+    )
+    original_colors = dict.fromkeys(
+        color for raw_color in raw_colors
+        if (color := parse_color_value(raw_color))
+    )
+    color_map = dict(color_variants or {})
+    for color in original_colors:
+        if color not in color_map:
+            color_map[color] = jitter_color(color, rng, enabled=enabled) or color
+    if color_variants is not None:
+        color_variants.update(color_map)
+
+    def mapped(colors: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(color_map.get(color, jitter_color(color, rng, enabled=enabled) or color) for color in colors)
+
+    def mapped_gradient(value: str) -> str:
+        return jitter_declarations(
+            (("background-image", value),),
+            rng,
+            enabled=enabled,
+            source_color_context=source_color_context,
+            color_variants=color_variants,
+        )[0][1]
+
+    def mapped_declarations(
+        declarations: tuple[tuple[str, str], ...],
+    ) -> tuple[tuple[str, str], ...]:
+        result = []
+        for name, value in declarations:
+            variant = dict(color_map)
+            variant.update({
+                original: jitter_color(original, rng, enabled=enabled) or original
+                for original in _gradient_color_values(value)
+                if original not in variant
+            })
+            result.append((name, _replace_known_colors(value, variant)))
+        return tuple(result)
+
+    return SourceColorContext(
+        source_text_color=(
+            color_map.get(source_color_context.source_text_color or "")
+            or source_color_context.source_text_color
+        ),
+        source_bg_color=(
+            color_map.get(source_color_context.source_bg_color or "")
+            or source_color_context.source_bg_color
+        ),
+        dominant_text_candidates=mapped(source_color_context.dominant_text_candidates),
+        dominant_bg_candidates=mapped(source_color_context.dominant_bg_candidates),
+        accent_candidates=mapped(source_color_context.accent_candidates),
+        gradient_candidates=tuple(mapped_gradient(value) for value in source_color_context.gradient_candidates),
+        overlay_candidates=tuple(mapped_gradient(value) for value in source_color_context.overlay_candidates),
+        body_styles=mapped_declarations(source_color_context.body_styles),
+        wrapper_styles=mapped_declarations(source_color_context.wrapper_styles),
+        element_styles=tuple(
+            (key, mapped_declarations(styles))
+            for key, styles in source_color_context.element_styles
+        ),
+        has_source_styles=source_color_context.has_source_styles,
+        color_variants=tuple(color_map.items()),
+    )
+
+
+def coordinated_color(
+    source_color_context: SourceColorContext,
+    value: str | None,
+    rng: random.Random | None,
+    *,
+    fallback: str,
+    enabled: bool = True,
+) -> str:
+    """Reuse a variant color when present; bound fallback colors to the same source."""
+    if value:
+        mapped = variant_color(source_color_context, value, "")
+        if mapped:
+            return mapped
+    return jitter_color(fallback, rng, enabled=enabled) or fallback
+
+
+def _replace_known_colors(value: str, variants: dict[str, str]) -> str:
+    # Work from concrete source values so identical colors remain identical everywhere.
+    def hex_replacement(match: re.Match[str]) -> str:
+        return variants.get(parse_color_value(match.group(0)) or "", match.group(0))
+
+    updated = _HEX_COLOR_RE.sub(hex_replacement, value)
+
+    def function_replacement(match: re.Match[str]) -> str:
+        return variants.get(parse_color_value(match.group(0)) or "", match.group(0))
+
+    updated = _COLOR_FUNCTION_RE.sub(function_replacement, updated)
+    return _COLOR_NAME_RE.sub(function_replacement, updated)
+
+
+def _gradient_color_values(value: str) -> tuple[str, ...]:
+    colors = [parse_color_value(match.group(0)) for match in _HEX_COLOR_RE.finditer(value)]
+    colors.extend(parse_color_value(match.group(0)) for match in _COLOR_FUNCTION_RE.finditer(value))
+    colors.extend(parse_color_value(match.group(0)) for match in _COLOR_NAME_RE.finditer(value))
+    return tuple(color for color in colors if color)
+
+
+def variant_color(
+    source_color_context: SourceColorContext,
+    value: str | None,
+    fallback: str,
+) -> str:
+    if value:
+        variants = dict(source_color_context.color_variants)
+        normalized = parse_color_value(value)
+        if normalized and normalized in variants:
+            return variants[normalized]
+        if parse_color_value(value):
+            return value
+    return fallback
 
 
 def _rules_to_inline(rule_text: str) -> tuple[tuple[str, str], ...]:
@@ -279,12 +656,29 @@ def random_css(
         enable_font_randomization = False
         enable_gradients = False
         enable_noise_textures = False
-        enable_color_palette_randomization = False
+        enable_font_features = False
+        rng = random.Random(0)
     if not enable_font_css:
         enable_font_randomization = False
         enable_font_features = False
 
-    source_color_context = source_color_context or SourceColorContext()
+    source_color_context = (
+        source_color_context
+        if source_color_context and source_color_context.color_variants
+        else prepare_source_colors(
+            source_color_context or SourceColorContext(),
+            rng,
+            enabled=enable_color_palette_randomization,
+        )
+    )
+    source_styles = dict(source_color_context.element_styles)
+    color_rng = rng if enable_color_palette_randomization else None
+    metric_rng = rng if enable_css_randomization else None
+
+    def _source_value(key: str, *names: str) -> str | None:
+        styles = source_styles.get(key, ())
+        values = dict(styles)
+        return next((values[name] for name in names if values.get(name)), None)
 
     def _contrast_safe_colors(
         palette: list[str],
@@ -327,23 +721,25 @@ def random_css(
             return preserved
 
         if not candidates:
-            return parse_color_value(fallback) or "#111827"
+            return parse_color_value(fallback) or "#111111"
         if not enable_color_palette_randomization:
             return candidates[0]
-        return pick(rng, candidates)
+        # Prefer the source-derived candidate over arbitrary list entries.
+        return candidates[0]
 
+    source_font = _source_value("body", "font-family") or dict(source_color_context.body_styles).get("font-family")
     base_font = ""
     base_is_variable = False
     if enable_font_css:
         base_pool = (
             pick(rng, ["sans", "serif", "humanist", "slab", "cjk", "mono"])
-            if enable_font_randomization
+            if enable_font_randomization and not source_font and not source_color_context.has_source_styles
             else "sans"
         )
         base_font, base_is_variable = (
             _build_font_stack(rng, base_pool)
-            if enable_font_randomization
-            else (", ".join(FONT_FALLBACKS["sans"]), False)
+            if enable_font_randomization and not source_font and not source_color_context.has_source_styles
+            else (source_font or ", ".join(FONT_FALLBACKS["sans"]), False)
         )
     heading_font = None
     quote_font = None
@@ -364,15 +760,15 @@ def random_css(
     quote_pool_choices = ["serif", "cursive", "cjk", "sans", "humanist", "handwriting"]
     code_pool_choices = ["mono", "mono", "mono", "humanist", "sans"]
 
-    if enable_font_css and enable_font_randomization and maybe(rng, 0.55):
+    if enable_font_css and enable_font_randomization and not source_styles and not _source_value("headings", "font-family") and maybe(rng, 0.55):
         heading_font, heading_is_variable = _build_font_stack(
             rng, pick(rng, heading_pool_choices)
         )
-    if enable_font_css and enable_font_randomization and maybe(rng, 0.38):
+    if enable_font_css and enable_font_randomization and not source_styles and not _source_value("blockquote", "font-family") and maybe(rng, 0.38):
         quote_font, quote_is_variable = _build_font_stack(
             rng, pick(rng, quote_pool_choices)
         )
-    if enable_font_css and enable_font_randomization and maybe(rng, 0.50):
+    if enable_font_css and enable_font_randomization and not source_styles and not _source_value("code", "font-family") and maybe(rng, 0.50):
         code_font, code_is_variable = _build_font_stack(rng, pick(rng, code_pool_choices))
 
     font_size = None
@@ -380,181 +776,104 @@ def random_css(
     letter_spacing = None
     word_spacing = None
     if enable_font_css:
+        source_font_size = _source_value("body", "font-size")
         font_size = (
-            rfloat(rng, 11.5, 20.5, 2)
-            if maybe(rng, 0.12)
-            else rfloat(rng, 13.2, 17.4, 2)
+            rfloat(rng, 15.8, 16.2, 2)
+            if enable_font_randomization and not source_font_size
+            else rfloat(rng, 15.9, 16.1, 2)
         )
-        if output_mode in {"default", "strict", "super_strict", "libero"}:
-            line_height = rfloat(rng, 1.10, 1.50, 3)
-        else:
-            line_height = (
-                rfloat(rng, 1.05, 2.10, 3)
-                if maybe(rng, 0.14)
-                else rfloat(rng, 1.22, 1.78, 3)
-            )
-        letter_spacing = (
-            rfloat(rng, -0.060, 0.080, 4)
-            if maybe(rng, 0.16)
-            else rfloat(rng, -0.024, 0.048, 4)
-        )
-        word_spacing = (
-            rfloat(rng, -0.080, 0.300, 4)
-            if maybe(rng, 0.16)
-            else rfloat(rng, -0.030, 0.180, 4)
-        )
+        line_height = 1.4 if output_mode in {"default", "strict", "super_strict", "libero"} else 1.5
+        letter_spacing = rfloat(rng, -0.001, 0.001, 4)
+        word_spacing = rfloat(rng, -0.001, 0.001, 4)
 
-    max_w = rfloat(rng, 640.0, 920.0, 2)
-    pad = rfloat(rng, 8.0, 24.0, 2)
-    margin_top = rfloat(rng, 6.0, 22.0, 2)
+    max_w = rfloat(rng, 598.0, 602.0, 2)
+    source_wrapper = dict(source_color_context.wrapper_styles)
+    pad = rfloat(rng, 11.8, 12.2, 2)
+    margin_top = rfloat(rng, 11.8, 12.2, 2)
+    if source_wrapper:
+        wrapper_padding = jitter_css_value(source_wrapper.get("padding", "12px"), metric_rng, property_name="padding")
+        wrapper_margin = jitter_css_value(source_wrapper.get("margin", "12px auto"), metric_rng, property_name="margin")
+    else:
+        wrapper_padding = f"{pad}px"
+        wrapper_margin = f"{margin_top}px auto"
 
-    source_bg_color = parse_color_value(source_color_context.source_bg_color)
-    source_text_color = parse_color_value(source_color_context.source_text_color)
-    dark_theme = (
-        _is_light_color(source_bg_color) is False
-        if source_bg_color
-        else (maybe(rng, 0.24) if allow_dark_mode and enable_color_palette_randomization else False)
+    source_bg_color = source_color_context.source_bg_color
+    source_text_color = source_color_context.source_text_color
+    dark_theme = _is_light_color(source_bg_color) is False
+    bg_color = coordinated_color(
+        source_color_context,
+        source_bg_color,
+        color_rng,
+        fallback="#ffffff" if allow_dark_mode or not dark_theme else "#111111",
+        enabled=enable_color_palette_randomization,
     )
-    text_palette = TEXT_COLORS if not dark_theme else [
-        "#e5e7eb",
-        "#f3f4f6",
-        "#cbd5e1",
-        "#f8fafc",
-    ]
-    bg_palette = BG_COLORS if not dark_theme else [
-        "#0b1220",
-        "#0f172a",
-        "#111827",
-        "#0d1117",
-        "#13151a",
-        "#161b22",
-    ]
-
-    opacity = 1.0 if super_strict else (rfloat(rng, 0.985, 1.0, 3) if maybe(rng, 0.12) else 1.0)
-    bg_candidates = list(dict.fromkeys([*source_color_context.dominant_bg_candidates, *bg_palette]))
-    bg_color = _pick_color(
-        bg_candidates,
-        preserve_color=source_bg_color,
-        fallback=source_bg_color or bg_palette[0],
+    text_color = coordinated_color(
+        source_color_context,
+        source_text_color,
+        color_rng,
+        fallback="#111111" if not dark_theme else "#f5f5f5",
+        enabled=enable_color_palette_randomization,
     )
-    text_candidates = list(
-        dict.fromkeys([*source_color_context.dominant_text_candidates, *text_palette, "#111827", "#f9fafb"])
-    )
-    text_color = _pick_color(
-        text_candidates,
-        background=bg_color,
-        minimum_contrast=MIN_TEXT_BG_CONTRAST,
-        preserve_color=source_text_color,
-        fallback=source_text_color or _safe_text_for_bg(bg_color),
-    )
-    if source_text_color and source_bg_color and contrast_ratio(source_text_color, source_bg_color) < MIN_TEXT_BG_CONTRAST:
+    if source_text_color and source_bg_color and contrast_ratio(text_color, bg_color) < MIN_TEXT_BG_CONTRAST:
         text_color = _safe_text_for_bg(bg_color)
+    opacity = 1.0
+    bg_candidates = list(dict.fromkeys([*source_color_context.dominant_bg_candidates, bg_color]))
+    text_candidates = list(dict.fromkeys([*source_color_context.dominant_text_candidates, text_color]))
 
     body_background_images: list[str] = []
-    gradient_options = []
-    if not dark_theme:
-        gradient_options = [
-            ("linear", "#fefefe", "#f7f8fb", 135),
-            ("linear", "#fcfcfc", "#f5f6f8", 165),
-            ("linear", "#faf9f7", "#f2f3f5", 95),
-            ("linear", "#f7f8f6", "#eef0f2", 45),
-            ("linear", "#fef7f1", "#f4f6f9", 120),
-            ("linear", "#f9fbff", "#f1f3f8", 200),
-            ("linear", "#d1d5db", "#f9fafb", 155),
-            ("radial", "#f8f9fb", "#f2f4f6", 0),
-            ("radial", "#fdfcfb", "#f4f4f6", 0),
-        ]
-    dark_gradients = [
-        ("linear", "#0b1220", "#0f172a", 135),
-        ("linear", "#0f172a", "#1e293b", 160),
-        ("linear", "#111827", "#0d1117", 95),
-        ("radial", "#0d1117", "#1f2937", 0),
-        ("linear", "#13151a", "#0b1220", 25),
-        ("linear", "#0f172a", "#312e81", 200),
-    ]
-    if dark_theme:
-        gradient_options = dark_gradients
-    if enable_gradients and not super_strict and maybe(rng, 0.38 if dark_theme else 0.30):
-        for _ in range(1 + (1 if maybe(rng, 0.25) else 0)):
-            g_type, c1, c2, angle = pick(rng, gradient_options)
-            if g_type == "linear":
-                body_background_images.append(
-                    f"linear-gradient({angle}deg, {c1} 0%, {c2} 100%)"
-                )
-            else:
-                body_background_images.append(
-                    f"radial-gradient(circle at {pick(rng, ['20% 20%', '80% 15%', '50% 40%'])}, {c1} 0%, {c2} 70%)"
-                )
+    if enable_gradients and not source_color_context.has_source_styles and not source_color_context.body_styles and maybe(rng, 0.30):
+        angle = rfloat(rng, 88.0, 92.0, 3) if metric_rng else 90.0
+        gradient_start = jitter_color(bg_color, color_rng) or bg_color
+        gradient_end = jitter_color(bg_color, color_rng) or bg_color
+        body_background_images.append(
+            f"linear-gradient({_format_number(angle)}deg, {gradient_start} 0%, {gradient_end} 100%)"
+        )
 
-    if dark_theme:
-        pattern_overlays = [
-            "linear-gradient(120deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.035) 60%, rgba(255,255,255,0) 90%)",
-            "radial-gradient(circle at 25% 20%, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 40%)",
-            "linear-gradient(180deg, rgba(15,23,42,0.16) 0%, rgba(15,23,42,0) 40%, rgba(15,23,42,0.12) 80%, rgba(15,23,42,0) 100%)",
-            "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 36%)",
-            "repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 12px)",
-            "repeating-radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 10px)",
-            "linear-gradient(90deg, rgba(255,255,255,0.028) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.16) 70%, rgba(255,255,255,0) 100%)",
-            "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 45%)",
-        ]
-
-        noise_textures = [
-            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.03\" fill=\"#cbd5e1\"/></svg>')",
-            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"#e5e7eb\" opacity=\"0.04\"/><path d=\"M10 20h1v1h-1z\" fill=\"#cbd5e1\" opacity=\"0.035\"/></svg>')",
-            "repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
-        ]
-    else:
-        pattern_overlays = [
-            "linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0) 90%)",
-            "radial-gradient(circle at 25% 20%, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0) 40%)",
-            "linear-gradient(180deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.025) 70%, rgba(0,0,0,0) 100%)",
-            "radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 36%)",
-            "repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 12px)",
-            "repeating-radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 10px)",
-            "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.02) 70%, rgba(255,255,255,0) 100%)",
-            "radial-gradient(circle at 10% 80%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%)",
-        ]
-
-        noise_textures = [
-            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 120\"><filter id=\"n\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"120\" height=\"120\" filter=\"url(%23n)\" opacity=\"0.05\"/></svg>')",
-            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 60 60\" shape-rendering=\"crispEdges\"><path d=\"M0 0h60v60H0z\" fill=\"none\"/><path d=\"M30 30h1v1h-1z\" fill=\"white\" opacity=\"0.08\"/><path d=\"M10 20h1v1h-1z\" fill=\"white\" opacity=\"0.06\"/></svg>')",
-            "repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 10px)",
-        ]
-
-    if not super_strict and maybe(rng, 0.22):
-        overlays = rng.sample(pattern_overlays, rng.randint(1, 2))
-        body_background_images.extend(overlays)
-    if enable_noise_textures and not super_strict and maybe(rng, 0.18):
-        body_background_images.append(pick(rng, noise_textures))
-
-    use_css_vars = maybe(rng, 0.32) if enable_body_styles else False
-    accent_candidates = [
-        "#0ea5e9",
-        "#2563eb",
-        "#1d4ed8",
-        "#38bdf8",
-        "#22d3ee",
-        "#16a34a",
-        "#10b981",
-        "#0f766e",
-        "#d97706",
-        "#f97316",
-        "#e11d48",
-        "#fb7185",
-        "#c084fc",
-        "#a855f7",
-        "#14b8a6",
-        "#fbbf24",
-        text_color,
-    ]
-    if dark_theme:
-        accent_candidates.extend(["#93c5fd", "#7dd3fc", "#f472b6", "#f59e0b", "#22c55e", "#c7d2fe"])
-    accent_var = _pick_color(
-        accent_candidates,
-        background=bg_color,
-        minimum_contrast=MIN_ACCENT_CONTRAST,
-        fallback=text_color,
+    pattern_color = accent_var = coordinated_color(
+        source_color_context,
+        source_color_context.accent_candidates[0] if source_color_context.accent_candidates else None,
+        color_rng,
+        fallback=text_color if contrast_ratio(text_color, bg_color) >= MIN_ACCENT_CONTRAST else _safe_text_for_bg(bg_color),
+        enabled=enable_color_palette_randomization,
     )
+
+    def pattern_overlay() -> str:
+        angle = rfloat(rng, 43.0, 47.0, 3) if metric_rng else 45.0
+        start = rfloat(rng, 0.25, 0.75, 3) if metric_rng else 0.5
+        period = rfloat(rng, 11.5, 12.5, 3) if metric_rng else 12.0
+        alpha = rfloat(rng, 0.004, 0.012, 4) if metric_rng else 0.008
+        return (
+            f"repeating-linear-gradient({_format_number(angle)}deg,"
+            f"{color_with_alpha(pattern_color, alpha)} 0px,"
+            f"{color_with_alpha(pattern_color, alpha)} {_format_number(start)}px,"
+            f"{color_with_alpha(pattern_color, 0)} {_format_number(start)}px,"
+            f"{color_with_alpha(pattern_color, 0)} {_format_number(period)}px)"
+        )
+
+    def noise_texture() -> str:
+        size = rint(rng, 118, 122) if metric_rng else 120
+        frequency = rfloat(rng, 0.79, 0.81, 4) if metric_rng else 0.8
+        octaves = rint(rng, 3, 4) if metric_rng else 4
+        opacity = rfloat(rng, 0.006, 0.016, 4) if metric_rng else 0.01
+        texture_color = jitter_color(pattern_color, color_rng) or pattern_color
+        return (
+            "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" "
+            f"viewBox=\"0 0 {size} {size}\"><filter id=\"n\"><feTurbulence "
+            f"type=\"fractalNoise\" baseFrequency=\"{frequency}\" numOctaves=\"{octaves}\" "
+            f"stitchTiles=\"stitch\"/></filter><rect width=\"{size}\" height=\"{size}\" "
+            f"filter=\"url(%23n)\" opacity=\"{opacity}\" fill=\"{texture_color}\"/></svg>')"
+        )
+
+    if source_color_context.overlay_candidates and not source_color_context.body_styles:
+        body_background_images.extend(source_color_context.overlay_candidates)
+    elif not source_color_context.has_source_styles and not source_color_context.body_styles and maybe(rng, 0.22):
+        body_background_images.append(pattern_overlay())
+    if enable_noise_textures and not source_color_context.has_source_styles and not source_color_context.body_styles and maybe(rng, 0.18):
+        body_background_images.append(noise_texture())
+
+    use_css_vars = maybe(rng, 0.32) if enable_body_styles and not source_color_context.body_styles else False
+    accent_candidates = [*source_color_context.accent_candidates, accent_var]
+
     bg_var = _pick_color(bg_candidates, preserve_color=bg_color, fallback=bg_color)
 
     use_bg_var = use_css_vars and maybe(rng, 0.55)
@@ -562,594 +881,212 @@ def random_css(
 
     body_css = ""
     if enable_body_styles:
-        body_rules = [
-            "margin: 0;",
-            f"background-color: {'var(--bg)' if use_bg_var else bg_color};",
-            f"color: {text_color};",
-            f"opacity: {opacity};",
-        ]
-        if use_css_vars:
+        source_body = source_styles.get("body", source_color_context.body_styles)
+        body_rules = []
+        present_body = {name for name, _ in source_body}
+        if not source_body and "background-color" not in present_body and "background" not in present_body:
+            body_rules.append(f"background-color: {'var(--bg)' if use_bg_var else bg_color};")
+        if not source_body and "color" not in present_body:
+            body_rules.append(f"color: {text_color};")
+        if "opacity" not in present_body and not source_body:
+            body_rules.append(f"opacity: {opacity};")
+        if enable_font_css and not source_body:
+            for name, value in (
+                ("font-family", base_font),
+                ("font-size", f"{font_size}px"),
+                ("line-height", str(line_height)),
+                ("letter-spacing", f"{letter_spacing}em"),
+                ("word-spacing", f"{word_spacing}em"),
+            ):
+                body_rules.append(f"{name}: {value};")
+        if not source_body and use_css_vars:
             body_rules.append(f"--accent: {accent_var};")
             body_rules.append(f"--bg: {bg_var};")
-        if enable_font_css:
-            body_rules.extend(
-                [
-                    f"font-family: {base_font};",
-                    f"font-size: {font_size}px;",
-                    f"line-height: {line_height};",
-                    f"letter-spacing: {letter_spacing}em;",
-                    f"word-spacing: {word_spacing}em;",
-                ]
-            )
-            if maybe(rng, 0.36):
-                if base_is_variable and maybe(rng, 0.55):
-                    low = rng.randint(380, 520)
-                    high = rng.randint(low + 40, min(650, low + 160))
-                    body_rules.append(f"font-weight:{low} {high};")
-                else:
-                    body_rules.append(f"font-weight:{rng.randint(380, 620)};")
-            if maybe(rng, 0.26):
-                if maybe(rng, 0.45):
-                    body_rules.append(f"font-style:oblique {rng.randint(4, 8)}deg;")
-                else:
-                    body_rules.append(f"font-style:{pick(rng, ['normal', 'italic'])};")
-            if maybe(rng, 0.18):
-                body_rules.append(f"font-variant:{pick(rng, ['normal', 'small-caps'])};")
-            if enable_font_features and maybe(rng, 0.20):
+        if enable_font_css and enable_font_features and not source_body and not source_color_context.has_source_styles:
+            if maybe(rng, 0.20):
                 feature_value = pick(
                     rng,
-                    ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1", "'ss01' 1"],
+                    ["'kern' 1, 'liga' 1", "'liga' 1", "'kern' 1, 'onum' 1"],
                 )
                 body_rules.append(f"font-feature-settings:{feature_value};")
-            if maybe(rng, 0.20):
-                body_rules.append(
-                    f"text-rendering:{pick(rng, ['auto', 'optimizeLegibility', 'geometricPrecision'])};"
-                )
-            if maybe(rng, 0.14):
-                body_rules.append(
-                    f"text-transform:{pick(rng, ['none', 'uppercase', 'lowercase', 'capitalize'])};"
-                )
-            if maybe(rng, 0.14):
-                body_rules.append(f"hyphens:{pick(rng, ['none', 'manual', 'auto'])};")
             if enable_font_features:
                 body_rules.extend(
-                    _maybe_font_details(
-                        rng,
-                        allow_variations=base_is_variable,
-                    )
+                    _maybe_font_details(rng, allow_variations=False)
                 )
 
-        if body_background_images and not super_strict:
-            body_rules.append(f"background-image: {', '.join(body_background_images)};")
-        if body_background_images and not super_strict and maybe(rng, 0.28):
-            body_rules.append(
-                f"background-size: {pick(rng, ['auto', '120% 120%', '90% 90%', '160% 160%'])};"
-            )
-        if body_background_images and not super_strict and maybe(rng, 0.22):
-            body_rules.append(
-                "background-position: "
-                f"{pick(rng, ['center', 'top left', 'top right', 'bottom left', 'bottom right'])};"
-            )
-        if body_background_images and not super_strict and maybe(rng, 0.18):
-            body_rules.append(
-                f"background-attachment: {pick(rng, ['scroll', 'fixed', 'local'])};"
-            )
+        if body_background_images and not source_body and not super_strict and "background-image" not in present_body:
+            body_rules.append(f"background-image: {', '.join(dict.fromkeys(body_background_images))};")
+        if body_background_images and not source_body and not super_strict and "background-size" not in present_body and maybe(rng, 0.28):
+            body_rules.append(f"background-size: {rfloat(rng, 99.5, 100.5, 2)}% {rfloat(rng, 99.5, 100.5, 2)}%;")
+        if body_background_images and not source_body and not super_strict and "background-position" not in present_body and maybe(rng, 0.22):
+            body_rules.append(f"background-position: {rfloat(rng, 49.5, 50.5, 2)}% {rfloat(rng, 49.5, 50.5, 2)}%;")
 
         body_css = " ".join(body_rules)
 
-    border_rad = rfloat(rng, 12.0, 20.0, 2)
-    border = "none"
-    if maybe(rng, 0.55):
-        border_styles = [
-            f"1px solid rgba(127,127,127,{rfloat(rng, 0.16, 0.28, 3)})",
-            f"1px dashed rgba(110,110,110,{rfloat(rng, 0.16, 0.24, 3)})",
-            f"1px solid rgba(210,210,210,{rfloat(rng, 0.18, 0.30, 3)})",
-            f"1px double rgba(120,120,120,{rfloat(rng, 0.14, 0.22, 3)})",
-        ]
-        border = pick(rng, border_styles)
-
-    shadow = "none"
-    if maybe(rng, 0.42):
-        shadow = pick(
-            rng,
-            [
-                "0 6px 18px rgba(0,0,0,0.07)",
-                "0 10px 24px -12px rgba(15,23,42,0.22)",
-                "0 3px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.04)",
-                "inset 0 1px 0 rgba(255,255,255,0.65), 0 12px 28px rgba(15,23,42,0.12)",
-            ],
-        )
-
-    layout_modes = ["block", "flow-root"]
-    if not strict_mode:
-        layout_modes.extend(["flex", "grid"])
-    layout_mode = pick(rng, layout_modes)
-    gap = rfloat(rng, 6.0, 14.0, 2)
-    if layout_mode == "flex":
-        flex_props = ["display:flex;", "flex-direction:column;", f"gap:{gap}px;"]
-        if maybe(rng, 0.24) and not strict_mode:
-            flex_props.append(
-                f"align-items:{pick(rng, ['stretch', 'flex-start', 'center'])};"
-            )
-        if maybe(rng, 0.22) and not strict_mode:
-            flex_props.append(
-                f"justify-content:{pick(rng, ['flex-start', 'space-between', 'center'])};"
-            )
-        extra = " ".join(flex_props)
-    elif layout_mode == "grid":
-        grid_props = ["display:grid;", f"gap:{gap}px;"]
-        columns = rng.randint(1, 3)
-        if columns > 1 and maybe(rng, 0.60):
-            grid_props.append(
-                f"grid-template-columns: repeat({columns}, minmax(0, 1fr));"
-            )
-        if maybe(rng, 0.30) and not strict_mode:
-            grid_props.append(
-                f"justify-items:{pick(rng, ['start', 'stretch', 'center'])};"
-            )
-        if maybe(rng, 0.22) and not strict_mode:
-            grid_props.append(
-                f"align-items:{pick(rng, ['start', 'stretch', 'center'])};"
-            )
-        extra = " ".join(grid_props)
-    else:
-        extra = f"display:{layout_mode};"
-
-    text_align = None
-    if maybe(rng, 0.18):
-        text_align = pick(rng, ["start", "left", "center", "justify"])
-
-    pad_y = pad
-    pad_x = pad
-    pad_top = pad
-    pad_bottom = pad
-    pad_right = pad
-    pad_left = pad
-    if maybe(rng, 0.30):
-        pad_y = rfloat(rng, 8.0, 26.0, 2)
-        pad_x = rfloat(rng, 8.0, 26.0, 2)
-    if maybe(rng, 0.22):
-        pad_top = rfloat(rng, 6.0, 24.0, 2)
-        pad_bottom = rfloat(rng, 6.0, 24.0, 2)
-        pad_left = rfloat(rng, 6.0, 24.0, 2)
-        pad_right = rfloat(rng, 6.0, 24.0, 2)
-
-    margin_bottom = rfloat(rng, 8.0, 22.0, 2)
-    margin_side = rfloat(rng, 0.0, 18.0, 2)
-    margin_pattern = f"{margin_top}px auto"
-    if maybe(rng, 0.30):
-        margin_pattern = f"{margin_top}px auto {margin_bottom}px"
-    if maybe(rng, 0.22):
-        margin_pattern = f"{margin_top}px {margin_side}px {margin_bottom}px"
-
+    border_rad = rfloat(metric_rng, 3.98, 4.02, 3) if metric_rng else 4.0
+    layout_mode = "block" if strict_mode else pick(rng, ["block", "flow-root"])
+    extra = f"display:{layout_mode};"
     wrapper_rules = []
-    if not strict_mode:
-        wrapper_rules.append(f"max-width: {max_w}px;")
-    wrapper_rules.extend(
-        [
-            (
-                f"padding: {pad_y}px {pad_x}px;"
-                if maybe(rng, 0.55)
-                else f"padding: {pad_top}px {pad_right}px {pad_bottom}px {pad_left}px;"
-            ),
-            f"margin: {margin_pattern};",
-        ]
-    )
-    if not strict_mode:
-        wrapper_rules.append(f"border-radius: {border_rad}px;")
-    wrapper_rules.extend([f"border: {border};", f"box-shadow: {shadow};", extra])
-    if text_align:
-        wrapper_rules.append(f"text-align: {text_align};")
-
+    if source_styles.get("wrapper"):
+        wrapper_rules.extend(
+            f"{name}:{jitter_css_value(value, metric_rng, property_name=name, jitter_colors=False)};"
+            for name, value in source_styles["wrapper"]
+        )
+    else:
+        wrapper_rules.append(f"padding:{wrapper_padding};margin:{wrapper_margin};")
+        if not source_color_context.has_source_styles:
+            wrapper_rules.append(f"border-radius:{border_rad}px;")
+        if not strict_mode and not source_color_context.has_source_styles:
+            wrapper_rules.append(f"max-width:{max_w}px;")
+        if not source_color_context.has_source_styles and maybe(rng, 0.4):
+            wrapper_rules.append(
+                f"border:1px solid {color_with_alpha(accent_var, rfloat(rng, 0.012, 0.026, 4))};"
+            )
+        if not source_color_context.has_source_styles and maybe(rng, 0.4):
+            shadow_y = rfloat(rng, 0.75, 1.25, 3) if metric_rng else 1.0
+            shadow_blur = rfloat(rng, 2.75, 3.25, 3) if metric_rng else 3.0
+            wrapper_rules.append(
+                f"box-shadow:0 {shadow_y}px {shadow_blur}px {color_with_alpha(accent_var, 0.018)};"
+            )
+        wrapper_rules.append(extra)
     wrapper_css = " ".join(wrapper_rules)
 
     extra_rules: list[str] = []
     heading_inline: tuple[tuple[str, str], ...] | None = None
     quote_inline: tuple[tuple[str, str], ...] | None = None
     code_inline: tuple[tuple[str, str], ...] | None = None
-    if enable_font_css and heading_font:
-        heading_style: list[str] = [f"font-family:{heading_font};"]
-        if maybe(rng, 0.60):
-            if heading_is_variable and maybe(rng, 0.55):
-                low = rng.randint(420, 560)
-                high = rng.randint(low + 30, min(680, low + 140))
-                heading_style.append(f"font-weight:{low} {high};")
-            else:
-                heading_style.append(f"font-weight:{rng.randint(430, 620)};")
-        if maybe(rng, 0.24):
-            heading_style.append(
-                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(5, 9)}deg'])};"
-            )
-        if enable_font_features:
-            heading_style.extend(
-                _maybe_font_details(
-                    rng,
-                    allow_variations=heading_is_variable,
-                )
-            )
+    if enable_font_css and heading_font and not source_color_context.has_source_styles and not source_styles.get("headings"):
+        heading_style = [f"font-family:{heading_font};"]
         heading_style_text = "".join(heading_style)
         extra_rules.append("h1,h2,h3,h4,h5,h6{" + heading_style_text + "}")
         heading_inline = _rules_to_inline(heading_style_text)
-    if enable_font_css and quote_font:
-        quote_style: list[str] = [f"font-family:{quote_font};"]
-        if maybe(rng, 0.50):
-            if quote_is_variable and maybe(rng, 0.55):
-                low = rng.randint(380, 520)
-                high = rng.randint(low + 40, min(640, low + 140))
-                quote_style.append(f"font-weight:{low} {high};")
-            else:
-                quote_style.append(f"font-weight:{rng.randint(380, 600)};")
-        if maybe(rng, 0.60):
-            quote_style.append(
-                f"font-style:{pick(rng, ['italic', f'oblique {rng.randint(4, 8)}deg', 'normal'])};"
-            )
-        if enable_font_features:
-            quote_style.extend(
-                _maybe_font_details(
-                    rng,
-                    allow_variations=quote_is_variable,
-                )
-            )
-        quote_style_text = "".join(quote_style)
+    if enable_font_css and quote_font and not source_color_context.has_source_styles and not source_styles.get("blockquote"):
+        quote_style_text = f"font-family:{quote_font};"
         extra_rules.append("blockquote{" + quote_style_text + "}")
         quote_inline = _rules_to_inline(quote_style_text)
-    if enable_font_css and code_font:
-        code_style: list[str] = [f"font-family:{code_font};"]
-        if maybe(rng, 0.44):
-            if code_is_variable and maybe(rng, 0.50):
-                low = rng.randint(380, 520)
-                high = rng.randint(low + 30, min(640, low + 120))
-                code_style.append(f"font-weight:{low} {high};")
-            else:
-                code_style.append(f"font-weight:{rng.randint(380, 600)};")
-        if maybe(rng, 0.14):
-            code_style.append(
-                f"font-style:{pick(rng, ['normal', 'italic', f'oblique {rng.randint(4, 7)}deg'])};"
-            )
-        if enable_font_features:
-            code_style.extend(
-                _maybe_font_details(
-                    rng,
-                    allow_variations=code_is_variable,
-                )
-            )
-        code_style_text = "".join(code_style)
+    if enable_font_css and code_font and not source_color_context.has_source_styles and not source_styles.get("code"):
+        code_style_text = f"font-family:{code_font};"
         extra_rules.append("code,pre,kbd,samp{" + code_style_text + "}")
         code_inline = _rules_to_inline(code_style_text)
 
-    accent_palette = [
-        "#0ea5e9",
-        "#2563eb",
-        "#1d4ed8",
-        "#38bdf8",
-        "#22d3ee",
-        "#16a34a",
-        "#10b981",
-        "#0f766e",
-        "#d97706",
-        "#f97316",
-        "#e11d48",
-        "#fb7185",
-        "#9333ea",
-        "#c084fc",
-        "#a855f7",
-        "#14b8a6",
-        "#fbbf24",
-        "#0f172a",
-        text_color,
-    ]
-
-    underline_styles = [
-        "underline solid",
-        "underline dotted",
-        "underline dashed",
-        "underline double",
-        "underline wavy",
-    ]
-
-    link_color = (
-        "var(--accent)"
-        if use_accent_var and maybe(rng, 0.55)
-        else _pick_color(
-            accent_palette,
-            background=bg_color,
-            minimum_contrast=MIN_ACCENT_CONTRAST,
-            fallback=text_color,
-        )
-    )
-    hover_color = (
-        "var(--accent)"
-        if use_accent_var and maybe(rng, 0.45)
-        else _pick_color(
-            accent_palette,
-            background=bg_color,
-            minimum_contrast=MIN_ACCENT_CONTRAST,
-            fallback=text_color,
-        )
-    )
-    active_color = (
-        "var(--accent)"
-        if use_accent_var and maybe(rng, 0.35)
-        else _pick_color(
-            accent_palette,
-            background=bg_color,
-            minimum_contrast=MIN_ACCENT_CONTRAST,
-            fallback=text_color,
-        )
-    )
-    underline = pick(rng, underline_styles)
-    underline_thickness = rfloat(rng, 1.0, 2.4, 2)
-    underline_offset = rfloat(rng, 1.5, 3.4, 2)
-
-    transition_pool = [
-        "transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;",
-        "transition: all 180ms ease-in-out;",
-        "transition: color 120ms linear, text-decoration-color 120ms linear;",
-        "transition: transform 140ms ease, box-shadow 180ms ease;",
-    ]
-    transition_rule = pick(rng, transition_pool)
-
-    link_rules = [
-        f"color:{link_color};",
-        f"text-decoration:{underline};",
-        f"text-decoration-thickness:{underline_thickness}px;",
-        f"text-underline-offset:{underline_offset}px;",
-        transition_rule if maybe(rng, 0.70) else "",
-    ]
-
-    hover_rules = [f"color:{hover_color};"]
-    if maybe(rng, 0.60):
-        hover_rules.append("text-decoration-color: currentColor;")
-    if maybe(rng, 0.22):
-        hover_rules.append("transform: translateY(-0.5px);")
-
-    active_rules = [f"color:{active_color};"]
-    if maybe(rng, 0.36):
-        active_rules.append("opacity:0.92;")
-
-    link_style_text = "".join(rule for rule in link_rules if rule)
-    extra_rules.append("a{" + link_style_text + "}")
-    extra_rules.append("a:hover{" + "".join(hover_rules) + "}")
-    extra_rules.append("a:focus{" + "".join(hover_rules) + "}")
-    extra_rules.append("a:focus-visible{" + "".join(hover_rules) + "}")
-    extra_rules.append("a:active{" + "".join(active_rules) + "}")
-
-    list_styles = [
-        "disc",
-        "circle",
-        "square",
-        "decimal",
-        "lower-alpha",
-        "upper-roman",
-    ]
-    list_style_type = pick(rng, list_styles)
-    list_style_position = pick(rng, ["inside", "outside"])
-    list_spacing = rfloat(rng, 0.35, 0.8, 2)
-    list_style_text = (
-        f"list-style-type:{list_style_type};"
-        f"list-style-position:{list_style_position};"
-        f"padding-left:{rfloat(rng, 16.0, 28.0, 2)}px;"
-        f"margin-block:{list_spacing}em;"
-    )
-    extra_rules.append("ul,ol{" + list_style_text + "}")
-    if maybe(rng, 0.30):
-        extra_rules.append(
-            "ul li::marker, ol li::marker{"
-            + f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
-            + (f"font-size:{rfloat(rng, 1.0, 1.2, 2)}em;" if maybe(rng, 0.32) else "")
-            + "}"
+    def _element_style(key: str, defaults: list[tuple[str, str]]) -> tuple[tuple[str, str], ...]:
+        if source_styles.get(key):
+            return tuple(
+                (name, jitter_css_value(value, metric_rng, property_name=name, jitter_colors=False))
+                for name, value in source_styles[key]
+            )
+        return tuple(
+            (name, jitter_css_value(value, metric_rng, property_name=name))
+            for name, value in defaults
         )
 
-    border_color = f"rgba(0,0,0,{rfloat(rng, 0.05, 0.14, 3)})"
-    stripe_color = f"rgba(0,0,0,{rfloat(rng, 0.015, 0.06, 3)})"
-    table_rule_parts = [
-        "width:100%;",
-        "border-collapse:collapse;" if maybe(rng, 0.55) else "border-collapse:separate;",
-        f"border:{rfloat(rng, 0.5, 1.2, 2)}px solid {border_color};",
-    ]
-    table_style_text = "".join(table_rule_parts)
-    extra_rules.append("table{" + table_style_text + "}")
-    cell_padding = rfloat(rng, 8.0, 14.0, 2)
-    cell_style_text = f"padding:{cell_padding}px;" "text-align:left;"
-    extra_rules.append("th,td{" + cell_style_text + "}")
-    th_bg_color = f"rgba(0,0,0,{rfloat(rng, 0.02, 0.06, 3)})"
-    th_fg_color = _pick_color(
-        [text_color, "#111827", "#f9fafb"],
-        background=th_bg_color,
-        minimum_contrast=MIN_TEXT_BG_CONTRAST,
-        preserve_color=text_color,
-        fallback=_safe_text_for_bg(th_bg_color),
-    )
-    th_style_text = (
-        f"background-color:{th_bg_color};"
-        f"color:{th_fg_color};"
-        + ("font-weight:700;" if maybe(rng, 0.55) else "")
-    )
-    extra_rules.append("th{" + th_style_text + "}")
+    link_color = coordinated_color(source_color_context, accent_var, color_rng, fallback=text_color)
+    link_style_text = declarations_text(_element_style("link", [
+        ("color", link_color), ("text-decoration", "underline"),
+        ("text-decoration-thickness", "1px"), ("text-underline-offset", "2px"),
+    ]))
+    if not source_styles.get("link"):
+        extra_rules.append("a{" + link_style_text + "}")
+    hover_color = jitter_color(link_color, color_rng) or link_color
+    hover_rules = f"color:{hover_color};"
+    if not source_styles.get("link"):
+        for pseudo in (":hover", ":focus", ":focus-visible", ":active"):
+            extra_rules.append(f"a{pseudo}{{{hover_rules}}}")
+
+    list_style_text = declarations_text(_element_style("list", [
+        ("padding-left", "20px"), ("margin-block", "0.5em"),
+    ]))
+    if not source_styles.get("list"):
+        extra_rules.append("ul,ol{" + list_style_text + "}")
+    if not source_styles.get("list") and maybe(rng, 0.30):
+        extra_rules.append(f"ul li::marker, ol li::marker{{color:{accent_var};}}")
+
+    table_style_text = declarations_text(_element_style("table", [
+        ("width", "100%"), ("border-collapse", "collapse"),
+        ("border", f"1px solid {color_with_alpha(accent_var, 0.04)}"),
+    ]))
+    if not source_styles.get("table"):
+        extra_rules.append("table{" + table_style_text + "}")
+    cell_style_text = declarations_text(_element_style("cell", [
+        ("padding", "8px"), ("text-align", "left"),
+    ]))
+    if not source_styles.get("cell"):
+        extra_rules.append("th,td{" + cell_style_text + "}")
+    th_style_text = declarations_text(_element_style("th", [
+        ("background-color", color_with_alpha(accent_var, 0.025)),
+        ("color", coordinated_color(source_color_context, text_color, color_rng, fallback=text_color)),
+    ]))
+    if not source_styles.get("th"):
+        extra_rules.append("th{" + th_style_text + "}")
     stripe_inline: tuple[tuple[str, str], ...] | None = None
-    if maybe(rng, 0.60):
-        stripe_style_text = f"background-color:{stripe_color};"
+    if source_styles.get("table_stripe") or (not source_styles.get("table") and maybe(rng, 0.3)):
+        stripe_style_text = declarations_text(_element_style("table_stripe", [
+            ("background-color", color_with_alpha(accent_var, 0.012)),
+        ]))
         extra_rules.append("tbody tr:nth-child(even){" + stripe_style_text + "}")
         stripe_inline = _rules_to_inline(stripe_style_text)
     caption_inline: tuple[tuple[str, str], ...] | None = None
-    if maybe(rng, 0.28):
-        caption_style_text = (
-            f"caption-side:{pick(rng, ['top', 'bottom'])};"
-            f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
-            f"font-style:{pick(rng, ['normal', 'italic'])};"
-            "padding:6px;"
-        )
+    if source_styles.get("caption") or (not source_styles.get("table") and maybe(rng, 0.2)):
+        caption_style_text = declarations_text(_element_style("caption", [
+            ("caption-side", "top"), ("color", accent_var), ("padding", "6px"),
+        ]))
         extra_rules.append("table caption{" + caption_style_text + "}")
         caption_inline = _rules_to_inline(caption_style_text)
 
-    button_bg = (
-        "var(--accent)"
-        if use_accent_var and maybe(rng, 0.40)
-        else _pick_color(
-            accent_palette,
-            background=bg_color,
-            minimum_contrast=MIN_ACCENT_CONTRAST,
-            fallback=text_color,
-        )
-    )
-    button_effective_bg = accent_var if button_bg.startswith("var(") else button_bg
-    button_fg = _pick_color(
-        [text_color, "#ffffff", "#111827"],
-        background=button_effective_bg,
-        minimum_contrast=MIN_TEXT_BG_CONTRAST,
-        preserve_color=text_color,
-        fallback=_safe_text_for_bg(button_effective_bg),
-    )
-    button_border = pick(
-        rng,
-        [
-            "none",
-            f"1px solid rgba(255,255,255,{rfloat(rng, 0.20, 0.45, 3)})",
-            f"1px solid rgba(0,0,0,{rfloat(rng, 0.12, 0.24, 3)})",
-        ],
-    )
-    button_shadow = pick(
-        rng,
-        [
-            "none",
-            f"0 4px 12px rgba(0,0,0,{rfloat(rng, 0.08, 0.18, 3)})",
-            "inset 0 1px 0 rgba(255,255,255,0.45), 0 6px 14px rgba(0,0,0,0.10)",
-        ],
-    )
+    button_style_text = declarations_text(_element_style("button", [
+        ("background-color", accent_var),
+        ("color", coordinated_color(source_color_context, _safe_text_for_bg(accent_var), color_rng, fallback=_safe_text_for_bg(accent_var))),
+        ("border", "1px solid " + color_with_alpha(accent_var, 0.25)),
+        ("padding", "8px 14px"), ("font-weight", "600"), ("cursor", "pointer"),
+    ]))
+    if not strict_mode and not source_styles.get("button"):
+        button_style_text += f"border-radius:{rfloat(rng, 3.98, 4.02, 2)}px;"
+    button_selector = "button,input[type=button],input[type=submit],input[type=reset]"
+    if not source_styles.get("button"):
+        extra_rules.append(button_selector + "{" + button_style_text + "}")
 
-    button_style_parts = [
-        f"background:{button_bg};",
-        f"color:{button_fg};",
-        f"border:{button_border};",
-        f"padding:{rfloat(rng, 7.0, 11.0, 2)}px {rfloat(rng, 12.0, 18.0, 2)}px;",
-        f"font-weight:{pick(rng, ['500', '600', '700'])};",
-        f"box-shadow:{button_shadow};",
-        transition_rule if maybe(rng, 0.75) else "",
-        "cursor:pointer;",
-    ]
-    button_style_text = "".join(part for part in button_style_parts if part)
-    button_rule = (
-        "button,input[type=button],input[type=submit],input[type=reset]{"
-        + button_style_text
-        + "}"
-    )
-    if not strict_mode:
-        button_radius = rfloat(rng, 6.0, 12.0, 2)
-        button_style_text = button_style_text.replace(
-            "border:",
-            f"border-radius:{button_radius}px;border:",
-        )
-        button_rule = (
-            "button,input[type=button],input[type=submit],input[type=reset]{"
-            + button_style_text
-            + "}"
-        )
-    extra_rules.append(button_rule)
 
-    button_hover = [
-        f"background:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
-    ]
-    if maybe(rng, 0.40):
-        button_hover.append("transform:translateY(-1px);")
-    if maybe(rng, 0.38):
-        button_hover.append(
-            f"box-shadow:0 8px 18px rgba(0,0,0,{rfloat(rng, 0.10, 0.20, 3)});"
-        )
-    extra_rules.append(
-        "button:hover,input[type=button]:hover,input[type=submit]:hover,input[type=reset]:hover{"
-        + "".join(button_hover)
-        + "}"
-    )
-    extra_rules.append(
-        "button:focus,input[type=button]:focus,input[type=submit]:focus,input[type=reset]:focus{"
-        + "".join(button_hover)
-        + "}"
-    )
-    extra_rules.append(
-        "button:focus-visible,input[type=button]:focus-visible,input[type=submit]:focus-visible,input[type=reset]:focus-visible{"
-        + "".join(button_hover)
-        + "}"
-    )
-    button_active = [
-        f"background:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
-    ]
-    if maybe(rng, 0.44):
-        button_active.append("transform:translateY(0px) scale(0.99);")
-    if maybe(rng, 0.30):
-        button_active.append("box-shadow:none;")
-    extra_rules.append(
-        "button:active,input[type=button]:active,input[type=submit]:active,input[type=reset]:active{"
-        + "".join(button_active)
-        + "}"
-    )
-
-    inline_accent_color = _pick_color(
-        accent_palette,
-        background=bg_color,
-        minimum_contrast=MIN_ACCENT_CONTRAST,
-        fallback=text_color,
-    )
-    small_style_text = (
-        f"color:{inline_accent_color};"
-        + (f"font-weight:{pick(rng, ['500', '600'])};" if maybe(rng, 0.40) else "")
-        + "letter-spacing:0.01em;"
-    )
-    extra_rules.append("small,sub,sup{" + small_style_text + "}")
-    mark_style_text = (
-        f"background-color:rgba(255, 255, 0, {rfloat(rng, 0.25, 0.55, 3)});"
-        f"color:{_pick_color([text_color, '#111827'], background='rgba(255, 255, 0, 1)', minimum_contrast=MIN_TEXT_BG_CONTRAST, preserve_color=text_color, fallback='#111827')};"
-        "padding:0 2px;"
-    )
-    mark_rule = "mark{" + mark_style_text
-    if not strict_mode:
-        mark_rule += "border-radius:3px;"
-    mark_rule += "}"
-    extra_rules.append(mark_rule)
-    abbr_style_text = (
-        f"border-bottom:1px {pick(rng, ['dotted', 'dashed', 'solid'])} {inline_accent_color};"
-        f"text-decoration-color:{inline_accent_color};"
-        "text-decoration-skip-ink:auto;"
-        "cursor:help;"
-    )
-    extra_rules.append("abbr{" + abbr_style_text + "}")
+    small_style_text = declarations_text(_element_style("small", [
+        ("color", coordinated_color(source_color_context, text_color, color_rng, fallback=text_color)),
+        ("letter-spacing", "0.01em"),
+    ]))
+    if not source_styles.get("small"):
+        extra_rules.append("small,sub,sup{" + small_style_text + "}")
+    mark_style_text = declarations_text(_element_style("mark", [
+        ("background-color", color_with_alpha(accent_var, 0.12)),
+        ("color", coordinated_color(source_color_context, text_color, color_rng, fallback=text_color)),
+        ("padding", "0 2px"),
+    ]))
+    if not source_styles.get("mark"):
+        extra_rules.append("mark{" + mark_style_text + "}")
+    abbr_style_text = declarations_text(_element_style("abbr", [
+        ("border-bottom", "1px dotted " + accent_var),
+        ("text-decoration-color", accent_var), ("cursor", "help"),
+    ]))
+    if not source_styles.get("abbr"):
+        extra_rules.append("abbr{" + abbr_style_text + "}")
     cite_inline: tuple[tuple[str, str], ...] | None = None
-    if maybe(rng, 0.26):
-        cite_style_text = (
-            f"color:{_pick_color(accent_palette, background=bg_color, minimum_contrast=MIN_ACCENT_CONTRAST, fallback=text_color)};"
-            "font-style:italic;"
-        )
+    if source_styles.get("cite_em") or (not source_styles and maybe(rng, 0.2)):
+        cite_style_text = declarations_text(_element_style("cite_em", [("color", accent_var)]))
         extra_rules.append("cite,em{" + cite_style_text + "}")
         cite_inline = _rules_to_inline(cite_style_text)
 
-    extra_rules.append(
-        "@media (min-width: 600px){"
-        ".content{display:flex;flex-wrap:wrap;}"
-        ".box{width:50%;}"
-        "}"
-    )
-    extra_rules.append(
-        "@media (max-width: 599px){"
-        ".content{display:block;}"
-        ".box{width:100%;}"
-        "}"
-    )
+
+    def _inline_default(key: str, text: str):
+        return None if source_styles.get(key) else _rules_to_inline(text)
 
     inline_styles = InlineStyleRules(
-        headings=heading_inline,
-        blockquote=quote_inline,
-        code=code_inline,
-        link=_rules_to_inline(link_style_text),
-        list_style=_rules_to_inline(list_style_text),
-        table=_rules_to_inline(table_style_text),
-        cell=_rules_to_inline(cell_style_text),
-        th=_rules_to_inline(th_style_text),
-        table_stripe=stripe_inline,
-        caption=caption_inline,
-        button=_rules_to_inline(button_style_text),
-        small=_rules_to_inline(small_style_text),
-        mark=_rules_to_inline(mark_style_text),
-        abbr=_rules_to_inline(abbr_style_text),
-        cite_em=cite_inline,
+        headings=heading_inline, blockquote=quote_inline, code=code_inline,
+        link=_inline_default("link", link_style_text),
+        list_style=_inline_default("list", list_style_text),
+        table=_inline_default("table", table_style_text),
+        cell=_inline_default("cell", cell_style_text),
+        th=_inline_default("th", th_style_text),
+        table_stripe=stripe_inline, caption=caption_inline,
+        button=_inline_default("button", button_style_text),
+        small=_inline_default("small", small_style_text),
+        mark=_inline_default("mark", mark_style_text),
+        abbr=_inline_default("abbr", abbr_style_text), cite_em=cite_inline,
     )
 
     return body_css, wrapper_css, "".join(extra_rules), inline_styles
@@ -1158,36 +1095,26 @@ def random_css(
 def letter_style(rng: random.Random, *, allow_inline_block: bool = True) -> str:
     fs = rfloat(rng, 0.998, 1.008, 4)
     ls = rfloat(rng, -0.008, 0.020, 4)
-    op = rfloat(rng, 0.970, 1.0, 3) if maybe(rng, 0.14) else 1.0
+    op = 1.0
 
-    # MUCH smaller/rarer position jitter
-    dy = rfloat(rng, -0.12, 0.12, 3) if maybe(rng, 0.12) else 0.0
-
-    rot = rfloat(rng, -0.20, 0.20, 3) if maybe(rng, 0.05) else 0.0
+    # Keep text readable: no opacity, rotation, or baseline mutation.
+    dy = 0.0
 
     display_rule = "display:inline;"
-    if allow_inline_block and maybe(rng, 0.10):
+    if allow_inline_block and maybe(rng, 0.04):
         display_rule = "display:inline-block;vertical-align:middle;"
 
     whitespace_rule = ""
-    if allow_inline_block and maybe(rng, 0.12):
-        whitespace_rule = "white-space:nowrap;"
 
     font_variation = ""
-    if maybe(rng, 0.05):
-        font_variation = (
-            "font-variation-settings:'wght' "
-            f"{rng.randint(360, 640)};"
-        )
 
     return (
         f"font-size:{fs}em;"
-        "line-height:1;"
+        "line-height:inherit;"
         f"letter-spacing:{ls}em;"
         f"opacity:{op};"
         f"{font_variation}"
         f"position:relative;top:{dy}px;"
         f"{display_rule}"
         f"{whitespace_rule}"
-        f"transform:rotate({rot}deg);"
     )

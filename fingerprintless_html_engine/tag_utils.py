@@ -50,14 +50,33 @@ def _style_has_prop(style_lower: str, prop: str) -> bool:
     return bool(re.search(rf"{re.escape(prop)}\s*:", style_lower))
 
 
-def _merge_style_value(style_value: str | None, additions: list[tuple[str, str]]) -> str:
+def _merge_style_value(
+    style_value: str | None,
+    additions: list[tuple[str, str]],
+    *,
+    replace_existing: bool = False,
+) -> str:
     merged_style = style_value or ""
-    style_lower = merged_style.lower()
     to_add: list[str] = []
+    existing = {
+        part.split(":", 1)[0].strip().lower()
+        for part in merged_style.split(";")
+        if ":" in part
+    }
     for prop, value in additions:
-        if not value or _style_has_prop(style_lower, prop):
+        if not value:
             continue
-        to_add.append(f"{prop}:{value};")
+        prop = prop.strip().lower()
+        if prop in existing:
+            if replace_existing:
+                pattern = re.compile(rf"(?i)(^|;)\s*{re.escape(prop)}\s*:[^;]*")
+                def replace_value(match: re.Match[str]) -> str:
+                    priority = " !important" if "!important" in match.group(0).lower() else ""
+                    return f"{match.group(1)}{prop}:{value}{priority}"
+                merged_style = pattern.sub(replace_value, merged_style)
+        else:
+            to_add.append(f"{prop}:{value};")
+            existing.add(prop)
 
     if not to_add:
         return merged_style
@@ -126,7 +145,7 @@ def _update_attr_value(tag: str, attr_name: str, new_value: str) -> str:
     return f"<{name}{slash}>"
 
 
-def apply_inline_styles(tag: str, additions: list[tuple[str, str]]) -> str:
+def apply_inline_styles(tag: str, additions: list[tuple[str, str]], *, replace_existing: bool = False) -> str:
     if not additions:
         return tag
     if not tag.startswith("<") or tag.startswith("</") or tag.startswith("<!") or tag.startswith("<?"):
@@ -151,7 +170,7 @@ def apply_inline_styles(tag: str, additions: list[tuple[str, str]]) -> str:
             continue
         updated_attrs.append(raw)
 
-    merged_style = _merge_style_value(style_value, additions)
+    merged_style = _merge_style_value(style_value, additions, replace_existing=replace_existing)
     if merged_style or style_value is not None:
         updated_attrs.append(f'style="{merged_style}"')
 

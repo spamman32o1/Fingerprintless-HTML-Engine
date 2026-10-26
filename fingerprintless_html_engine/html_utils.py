@@ -168,8 +168,8 @@ def extract_body_content(html_in: str) -> str:
     return stripped.strip()
 
 
-def extract_body_content_with_inline_safe_styles(html_in: str, *, strict_mode: bool = False) -> str:
-    return inline_safe_embedded_css(html_in, strict_mode=strict_mode)
+def extract_body_content_with_inline_safe_styles(html_in: str, *, strict_mode: bool = False, jitter=None) -> str:
+    return inline_safe_embedded_css(html_in, strict_mode=strict_mode, jitter=jitter)
 
 
 def sanitize_input_html(html_in: str) -> str:

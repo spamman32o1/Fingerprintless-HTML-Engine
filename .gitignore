@@ -1,0 +1,40 @@
+# Generated variant output (regenerable; produced by running the engine)
+variants_*/
+generated_synonym_map.txt
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editors and OS cruft
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local Ollama model data, if ever mounted inside the repo
+.ollama/

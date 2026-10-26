@@ -20,7 +20,7 @@ class Opt:
     max_nesting_jitter: int = 0
     title_prefix: str = "Variant"
 
-    ie_condition_randomize: bool = True
+    ie_condition_randomize: bool = False
     structure_randomize: bool = True
     # "default", "strict", "super_strict", or "libero"
     output_mode: str = "default"
@@ -33,10 +33,9 @@ class Opt:
     enable_noise_textures: bool = True
     enable_color_palette_randomization: bool = True
     enable_span_wrapping: bool = True
-    enable_alt_text_randomization: bool = True
-    enable_meta_noise: bool = True
-    enable_jsonld_noise: bool = True
-    enable_noise_divs: bool = True
+    enable_meta_noise: bool = False
+    enable_jsonld_noise: bool = False
+    enable_noise_divs: bool = False
     enable_wrapper_nesting: bool = True
     enable_layout_randomization: bool = True
     enable_body_styles: bool = True

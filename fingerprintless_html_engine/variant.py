@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import random
 import re
@@ -8,16 +9,20 @@ from collections import Counter
 
 from .css_utils import (
     SourceColorContext,
+    declarations_text,
+    jitter_declarations,
     parse_color_value,
     parse_inline_style_declarations,
+    prepare_source_colors,
     random_css,
 )
 from .image_utils import RemoteImageCache, inline_image_references
 from .html_utils import extract_body_content_with_inline_safe_styles, minify_output_html
 from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
-from .noise_utils import ie_noise_block, meta_noise, noise_divs
+from .noise_utils import ie_noise_block, meta_noise
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
+from .safe_css_utils import source_css_rules
 from .structure_utils import randomize_structure, wrap_content_boxes
 from .tag_utils import (
     _parse_tag_attrs,
@@ -59,6 +64,17 @@ def _extract_colors_from_attrs(
     return style_colors + legacy_colors
 
 
+SOURCE_STYLE_KEYS = {
+    "body": "body", "h1": "headings", "h2": "headings", "h3": "headings",
+    "h4": "headings", "h5": "headings", "h6": "headings", "a": "link",
+    "ul": "list", "ol": "list", "table": "table", "td": "cell", "th": "th",
+    "button": "button", "input": "button", "small": "small", "sub": "small",
+    "sup": "small", "mark": "mark", "abbr": "abbr", "cite": "cite_em",
+    "em": "cite_em", "blockquote": "blockquote", "code": "code", "pre": "code",
+}
+COLOR_RE = re.compile(r"(?<![\w-])#[0-9a-fA-F]{3,8}\b|rgba?\([^()]+\)|hsla?\([^()]+\)")
+
+
 def analyze_source_colors(content_html: str) -> SourceColorContext:
     body_text_colors: list[str] = []
     body_bg_colors: list[str] = []
@@ -66,6 +82,17 @@ def analyze_source_colors(content_html: str) -> SourceColorContext:
     layout_bg_colors: list[str] = []
     repeated_text: Counter[str] = Counter()
     repeated_bg: Counter[str] = Counter()
+
+    for selector, declarations in source_css_rules(content_html):
+        if selector != "body":
+            continue
+        for name, value in declarations:
+            if name == "color":
+                if parsed := parse_color_value(value):
+                    body_text_colors.append(parsed)
+            elif name in {"background", "background-color"}:
+                if parsed := parse_color_value(value):
+                    body_bg_colors.append(parsed)
 
     for tag_name, attr_text in START_TAG_RE.findall(content_html):
         tag_name = tag_name.lower()
@@ -110,6 +137,85 @@ def analyze_source_colors(content_html: str) -> SourceColorContext:
     )
 
 
+def analyze_source_styles(content_html: str, source_colors: SourceColorContext) -> SourceColorContext:
+    """Collect source anchors; actual declarations remain on their original elements."""
+    element_styles: dict[str, list[tuple[str, str]]] = {}
+    body_styles: list[tuple[str, str]] = []
+    colors: list[str] = []
+
+    def capture(key: str, declarations: tuple[tuple[str, str], ...]) -> None:
+        target = element_styles.setdefault(key, [])
+        target.extend(declarations)
+        for name, value in declarations:
+            if name in {"color", "border-color", "text-decoration-color", "outline-color"}:
+                colors.extend(COLOR_RE.findall(value))
+
+    for selector, declarations in source_css_rules(content_html):
+        key = SOURCE_STYLE_KEYS.get(selector)
+        if key:
+            capture(key, declarations)
+        if selector == "body":
+            body_styles.extend(declarations)
+
+    for tag_name, attr_text in START_TAG_RE.findall(content_html):
+        tag_name = tag_name.lower()
+        attrs = _parse_tag_attrs(attr_text.strip())
+        declarations = parse_inline_style_declarations(next(
+            (value or "" for name, _, value in attrs if name.lower() == "style"), ""
+        ))
+        styles = list(declarations.items())
+        for name, _raw, value in attrs:
+            if value is None:
+                continue
+            name = name.lower()
+            prop = {"color": "color", "text": "color", "bgcolor": "background-color", "face": "font-family"}.get(name)
+            if prop and prop not in declarations:
+                styles.append((prop, value))
+        if tag_name == "body":
+            body_styles.extend(styles)
+        elif tag_name in SOURCE_STYLE_KEYS:
+            capture(SOURCE_STYLE_KEYS[tag_name], tuple(styles))
+        for name, value in styles:
+            if name in {"color", "border-color", "text-decoration-color", "outline-color"}:
+                colors.extend(COLOR_RE.findall(value))
+
+    body_declarations = tuple(dict(body_styles).items())
+
+    def source_gradients(value: str) -> tuple[str, ...]:
+        found: list[str] = []
+        for match in re.finditer(r"(?i)(?:repeating-)?(?:linear|radial)-gradient\(", value):
+            depth = 0
+            for index in range(match.start(), len(value)):
+                if value[index] == "(":
+                    depth += 1
+                elif value[index] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        found.append(value[match.start():index + 1])
+                        break
+        return tuple(found)
+
+    gradients = tuple(
+        gradient
+        for name, value in body_declarations
+        if name in {"background", "background-image"}
+        for gradient in source_gradients(value)
+    )
+    overlays = tuple(gradient for gradient in gradients if gradient.lower().startswith("repeating-"))
+    return SourceColorContext(
+        source_text_color=source_colors.source_text_color,
+        source_bg_color=source_colors.source_bg_color,
+        dominant_text_candidates=source_colors.dominant_text_candidates,
+        dominant_bg_candidates=source_colors.dominant_bg_candidates,
+        accent_candidates=tuple(dict.fromkeys(colors)),
+        gradient_candidates=gradients,
+        overlay_candidates=overlays,
+        body_styles=body_declarations,
+        has_source_styles=bool(body_styles or element_styles),
+        element_styles=tuple((key, tuple(dict(styles).items())) for key, styles in element_styles.items()),
+    )
+
+
 def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
     wrap_factor = rfloat(rng, 0.8, 1.2)
     word_factor = rfloat(rng, 0.8, 1.2)
@@ -145,7 +251,6 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
         enable_span_wrapping=opt.enable_span_wrapping,
-        enable_alt_text_randomization=opt.enable_alt_text_randomization,
         enable_meta_noise=opt.enable_meta_noise,
         enable_jsonld_noise=opt.enable_jsonld_noise,
         enable_noise_divs=opt.enable_noise_divs,
@@ -164,6 +269,11 @@ def random_title() -> str:
     return f"letter-{uuid.uuid4().hex[:12]}"
 
 
+def _variant_identity(idx: int, title: str) -> str:
+    # Include index and title so direct API callers also receive distinct documents.
+    return hashlib.sha256(f"{idx}:{title}".encode("utf-8")).hexdigest()[:24]
+
+
 def build_variant(
     rng: random.Random,
     content_html: str,
@@ -180,7 +290,56 @@ def build_variant(
     strict_mode = is_strict_output_mode(opt.output_mode)
     super_strict = opt.output_mode in {"super_strict", "libero"}
     content_html = normalize_input_html(content_html, strict_mode=strict_mode)
-    content_html = extract_body_content_with_inline_safe_styles(content_html, strict_mode=strict_mode)
+    source_color_context = analyze_source_colors(content_html)
+    source_color_context = analyze_source_styles(content_html, source_color_context)
+    original_body_declarations: list[tuple[str, str]] = list(source_color_context.body_styles)
+    body_attributes = ""
+    body_match = re.search(r"(?is)<body\b([^>]*)>", content_html)
+    if body_match:
+        retained_attributes: list[str] = []
+        body_declaration_names = {name for name, _ in original_body_declarations}
+        legacy_body_declarations: list[tuple[str, str]] = []
+        for attr_name, raw, value in _parse_tag_attrs(body_match.group(1).strip()):
+            attr_name = attr_name.lower()
+            if attr_name == "style":
+                declarations = parse_inline_style_declarations(value)
+                original_body_declarations.extend(declarations.items())
+                body_declaration_names.update(declarations)
+            elif attr_name in {"text", "bgcolor", "background"} and value:
+                legacy_body_declarations.append((
+                    "background-color" if attr_name == "bgcolor" else ("background" if attr_name == "background" else "color"),
+                    value,
+                ))
+            else:
+                retained_attributes.append(raw)
+        original_body_declarations.extend(
+            (name, value) for name, value in legacy_body_declarations
+            if name not in body_declaration_names
+        )
+        body_attributes = " ".join(retained_attributes)
+    color_variants: dict[str, str] = {}
+    source_color_context = prepare_source_colors(
+        source_color_context,
+        rng,
+        enabled=opt.enable_color_palette_randomization,
+        color_variants=color_variants,
+    )
+
+    def jitter_source_declarations(declarations):
+        return jitter_declarations(
+            declarations,
+            rng,
+            enabled=opt.enable_css_randomization,
+            color_enabled=opt.enable_color_palette_randomization,
+            source_color_context=source_color_context,
+            color_variants=color_variants,
+        )
+
+    content_html = extract_body_content_with_inline_safe_styles(
+        content_html,
+        strict_mode=strict_mode,
+        jitter=jitter_source_declarations,
+    )
     content_html = inline_image_references(
         content_html,
         enabled=opt.enable_image_inlining and opt.output_mode != "libero",
@@ -190,7 +349,6 @@ def build_variant(
             else RemoteImageCache(enabled=False)
         ),
     )
-    source_color_context = analyze_source_colors(content_html)
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(
         rng,
@@ -206,10 +364,17 @@ def build_variant(
         enable_body_styles=opt.enable_body_styles,
         source_color_context=source_color_context,
     )
+    if original_body_declarations:
+        body_css = (
+            declarations_text(jitter_source_declarations(original_body_declarations))
+            if opt.enable_body_styles
+            else ""
+        )
     if opt.disable_wrapper_styles:
         wrapper_css = ""
     wrapper_class = f"{uuid.uuid4().hex[:6]}"
     content_class = f"{uuid.uuid4().hex[:6]}"
+
     structured_html = (
         content_html
         if super_strict
@@ -230,31 +395,11 @@ def build_variant(
         else build_fake_jsonld_scripts(rng)
     )
 
-    if not super_strict:
-        ie_before = ie_noise_block(rng, opt.ie_condition_randomize)
-        ie_after = ie_noise_block(rng, opt.ie_condition_randomize)
-        if strict_mode:
-            before = ie_before
-            after = ie_after
-        else:
-            before = ie_before + noise_divs(
-                rng,
-                opt.noise_divs_max,
-                enabled=opt.enable_noise_divs,
-            )
-            after = (
-                noise_divs(
-                    rng,
-                    opt.noise_divs_max,
-                    enabled=opt.enable_noise_divs,
-                )
-                + ie_after
-            )
-    else:
-        ie_before = ""
-        ie_after = ""
-        before = ""
-        after = ""
+    before = ""
+    after = ""
+    if opt.ie_condition_randomize and not super_strict:
+        before += ie_noise_block(rng, True)
+        after += ie_noise_block(rng, True)
 
     depth = (
         0
@@ -264,10 +409,10 @@ def build_variant(
     open_wrap = ""
     close_wrap = ""
     for _ in range(depth):
-        pad = rfloat(rng, 0.0, 12.0, 2)
-        mt = rfloat(rng, 0.0, 10.0, 2)
-        mb = rfloat(rng, 0.0, 10.0, 2)
-        disp = pick(rng, ["block", "flow-root", "contents"])
+        pad = rfloat(rng, 0.0, 0.1, 3)
+        mt = rfloat(rng, 0.0, 0.1, 3)
+        mb = rfloat(rng, 0.0, 0.1, 3)
+        disp = pick(rng, ["block", "flow-root"])
         nested_class = f"{uuid.uuid4().hex[:9]}"
         open_wrap += (
             f'<div class="{nested_class}" '
@@ -291,11 +436,16 @@ def build_variant(
         jsonld_scripts=jsonld_scripts,
         extra_css=extra_css,
         output_mode=opt.output_mode,
+        variant_identity=_variant_identity(idx, title),
         allow_ie_conditional_comments=opt.ie_condition_randomize,
         enable_meta_noise=opt.enable_meta_noise,
         enable_layout_randomization=opt.enable_layout_randomization,
         disable_layout_tables=opt.disable_layout_tables,
         disable_wrapper_styles=opt.disable_wrapper_styles,
+        body_attributes=body_attributes,
+        table_css="table.layout-table,table.inner-table{width:100%;border-collapse:collapse;}",
+        source_bg_color=source_color_context.source_bg_color,
+        has_source_body_styles=bool(original_body_declarations),
     )
     return minify_output_html(rendered, pretty_output=opt.pretty_output)
 
@@ -317,16 +467,25 @@ def build_layout_template(
     extra_css: str,
     output_mode: str,
     allow_ie_conditional_comments: bool = True,
-    enable_meta_noise: bool = True,
+    enable_meta_noise: bool = False,
     enable_layout_randomization: bool = True,
     disable_layout_tables: bool = False,
     disable_wrapper_styles: bool = False,
+    body_attributes: str = "",
+    table_css: str = "",
+    source_bg_color: str | None = None,
+    has_source_body_styles: bool = False,
+    variant_identity: str = "",
 ) -> str:
     strict_mode = is_strict_output_mode(output_mode)
     super_strict = output_mode in {"super_strict", "libero"}
+    body_background_color = source_bg_color or parse_color_value(
+        parse_inline_style_declarations(body_css).get("background-color")
+        or parse_inline_style_declarations(body_css).get("background")
+    )
     body_style_attr = (
         f' style="{html.escape(body_css, quote=True)}"'
-        if strict_mode and body_css
+        if body_css and strict_mode
         else ""
     )
     if strict_mode and not disable_wrapper_styles and wrapper_css:
@@ -338,7 +497,10 @@ def build_layout_template(
     if strict_mode:
         style_block = ""
     else:
-        body_rule = f"body{{{body_css}}}" if body_css else ""
+        body_rule = (
+            table_css
+            + (f"body{{{body_css}}}" if body_css and not has_source_body_styles else "")
+        )
         style_block = (
             "<style>"
             f"{body_rule}"
@@ -353,7 +515,7 @@ def build_layout_template(
         '<meta charset="utf-8" />'
         '<meta name="viewport" content="width=device-width, initial-scale=1" />'
         '<meta name="x-apple-disable-message-reformatting" content="yes" />'
-        f"{meta_noise(rng, enabled=enable_meta_noise) if not strict_mode else ''}"
+        f"{meta_noise(rng, enabled=enable_meta_noise, source_bg_color=body_background_color) if not strict_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
         f"{jsonld_scripts}"
@@ -474,4 +636,10 @@ def build_layout_template(
                 f"{table_fallback_open}{outer_container}{table_fallback_close}"
             )
 
-    return f"{head_html}<body{body_style_attr}>{before_body}{outer_container}{after_body}</body></html>"
+    identity_attribute = ""
+    if variant_identity:
+        identity_name = f"data-x{variant_identity[:8]}"
+        if not re.search(rf"(?i)\b{re.escape(identity_name)}\s*=", body_attributes):
+            identity_attribute = f' {identity_name}="{html.escape(variant_identity, quote=True)}"'
+    body_attr_text = (" " + body_attributes) if body_attributes else ""
+    return f"{head_html}<body{body_style_attr}{identity_attribute}{body_attr_text}>{before_body}{outer_container}{after_body}</body></html>"

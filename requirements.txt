@@ -1,0 +1,4 @@
+# Synonym generation talks to a local Ollama daemon over HTTP; no Python
+# dependencies are required. Start the daemon with:
+#   docker compose up -d ollama && docker compose run --rm ollama-pull
+# See README.md ("Synonym generation") for model recommendations.

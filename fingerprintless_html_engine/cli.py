@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html as _html_mod
 import random
 import re
 from datetime import datetime
@@ -12,11 +13,10 @@ from .image_utils import RemoteImageCache
 from .io_utils import _collect_input_files, _prompt_yes_no, prompt_int, read_text_with_fallback
 from .models import Opt
 from .synonym_discovery import (
-    HeuristicDictionaryProvider,
-    PyDictionaryProvider,
-    SpacySimilarityProvider,
-    SynonymProvider,
-    WordNetProvider,
+    DEFAULT_MODEL,
+    DEFAULT_OLLAMA_HOST,
+    SynonymDataUnavailable,
+    check_available,
     generate_synonym_groups,
 )
 from .text_utils import build_synonym_patterns, parse_synonym_lines
@@ -69,6 +69,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Input HTML encoding (default: utf-8; on decode error retries latin-1 then windows-1252).",
     )
     parser.add_argument(
+        "--ie-conditional-comments",
+        action="store_true",
+        dest="ie_condition_randomize",
+        help="Opt into randomized IE conditional comments (disabled by default).",
+    )
+    parser.add_argument(
         "--no-ie-conditional-comments",
         action="store_false",
         dest="ie_condition_randomize",
@@ -102,13 +108,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-css-randomization",
         action="store_false",
         dest="enable_css_randomization",
-        help="Disable randomized CSS styling (forces neutral defaults for colors, fonts, gradients, and textures).",
+        help="Disable source-relative CSS value and typography jitter.",
     )
     parser.add_argument(
         "--no-font-randomization",
         action="store_false",
         dest="enable_font_randomization",
-        help="Disable randomized font stack selection.",
+        help="Disable fallback font-stack selection for unstyled fragments.",
     )
     parser.add_argument(
         "--no-font-css",
@@ -138,7 +144,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-color-palette-randomization",
         action="store_false",
         dest="enable_color_palette_randomization",
-        help="Disable randomized color palette selection (uses neutral defaults).",
+        help="Disable bounded source-color jitter; preserve original colors.",
     )
     parser.add_argument(
         "--no-span-wrap",
@@ -147,10 +153,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable span wrapping in text nodes.",
     )
     parser.add_argument(
-        "--no-alt-randomization",
-        action="store_false",
-        dest="enable_alt_text_randomization",
-        help="Disable randomized alt text updates on images.",
+        "--meta-noise",
+        action="store_true",
+        dest="enable_meta_noise",
+        help="Opt into randomized metadata (disabled by default).",
     )
     parser.add_argument(
         "--no-meta-noise",
@@ -159,10 +165,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable randomized meta tag noise in the document head.",
     )
     parser.add_argument(
+        "--jsonld-noise",
+        action="store_true",
+        dest="enable_jsonld_noise",
+        help="Opt into JSON-LD noise (disabled by default).",
+    )
+    parser.add_argument(
         "--no-jsonld-noise",
         action="store_false",
         dest="enable_jsonld_noise",
         help="Disable fake JSON-LD script noise.",
+    )
+    parser.add_argument(
+        "--noise-divs",
+        action="store_true",
+        dest="enable_noise_divs",
+        help="Opt into non-rendering structural noise (disabled by default).",
     )
     parser.add_argument(
         "--no-noise-divs",
@@ -229,23 +247,33 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--generate-synonyms",
         action="store_true",
-        default=None,
+        default=True,
         dest="generate_synonyms",
-        help="Enable automatic synonym map generation.",
+        help="Enable automatic synonym map generation (default).",
     )
     parser.add_argument(
         "--no-generate-synonyms",
         action="store_false",
-        default=None,
+        default=True,
         dest="generate_synonyms",
         help="Disable automatic synonym map generation.",
     )
     parser.add_argument(
-        "--synonym-provider",
-        action="append",
-        default=[],
-        dest="synonym_providers",
-        help="Provider(s) for generated synonyms. Repeat the flag or pass comma-separated values.",
+        "--ollama-host",
+        default=None,
+        dest="ollama_host",
+        metavar="URL",
+        help=(
+            "Ollama endpoint used for synonym generation "
+            f"(default: ${'OLLAMA_HOST'} or {DEFAULT_OLLAMA_HOST})."
+        ),
+    )
+    parser.add_argument(
+        "--synonym-model",
+        default=None,
+        dest="synonym_model",
+        metavar="NAME",
+        help=f"Ollama model used for synonym generation (default: {DEFAULT_MODEL}).",
     )
     parser.add_argument(
         "--write-generated-synonym-map",
@@ -276,42 +304,70 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _parse_provider_names(raw_values: Sequence[str]) -> list[str]:
-    providers: list[str] = []
-    for value in raw_values:
-        parts = [part.strip().lower() for part in value.split(",")]
-        providers.extend(part for part in parts if part)
-    return providers
+#: Matches base64 data URIs so their encoded payload never reaches the model. The
+#: payload is letters/digits only and would otherwise crowd out the real sentences.
+_BASE64_DATA_URI_RE = re.compile(r"data:[^,]*;base64,[A-Za-z0-9+/=]+", re.IGNORECASE)
+
+#: Matches a tag, a closing tag, a comment, a doctype, or a declaration.
+_TAG_OR_DECL_RE = re.compile(r"<[^>]+>")
+
+#: Matches an entire ``<style>``/``<script>`` element including its body. Their
+#: content is CSS/JavaScript, never prose, and stripping only the tags leaves the
+#: CSS property names (``margin``, ``font-family``, ``!important``) behind.
+_RAW_TEXT_BLOCK_RE = re.compile(r"<(style|script|title|textarea)[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+
+#: Block-level tags, which mark a visual break. They become newlines so adjacent
+#: sentences and list items stay separate after the tags themselves are removed.
+_BLOCK_TAG_RE = re.compile(
+    r"</?(?:p|div|br|tr|td|th|li|ul|ol|h[1-6]|table|tbody|thead|blockquote|hr|section|article|header|footer)\b[^>]*>",
+    re.IGNORECASE,
+)
+
+#: Attributes whose values are machine content (base64 payloads, URLs) rather than
+#: prose. They are stripped before tokenization so encoded data never leaks in.
+_ATTR_RE = re.compile(r"(?:src|href|url|data|alt|value)\s*=\s*\"[^\"]*\"|(?:src|href|url|data|alt|value)\s*=\s*'[^']*'|(?:src|href|url|data|alt|value)\s*=\s*[^\s>]+", re.IGNORECASE)
 
 
-def _create_synonym_providers(provider_names: Sequence[str]) -> list[SynonymProvider]:
-    provider_factories = {
-        "wordnet": WordNetProvider,
-        "pydictionary": PyDictionaryProvider,
-        "spacy": SpacySimilarityProvider,
-        "heuristic": HeuristicDictionaryProvider,
-    }
-    providers: list[SynonymProvider] = []
-    for name in provider_names:
-        factory = provider_factories.get(name)
-        if factory is None:
-            raise ValueError(f"Unknown synonym provider '{name}'.")
-        providers.append(factory())
-    return providers
+def extract_document_prose(text_blocks: Iterable[str]) -> str:
+    """Return the visible prose of an HTML document as plain text.
 
+    The synonym pass is context-dependent: the model must read real sentences to
+    tell a verb from a noun and to notice that a word is part of a product name.
+    So this returns sentences rather than a bag of tokens, with everything that is
+    not prose removed first:
 
-def _extract_seed_terms(text_blocks: Iterable[str], limit: int = 40) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
+    * base64 data URIs, whose payload would otherwise dominate the text;
+    * whole ``<style>``/``<script>``/``<title>``/``<textarea>`` blocks, whose
+      content is CSS/JS and whose leftover property names read as English;
+    * machine-content attribute values such as ``src`` and ``href``;
+    * all remaining tags and declarations;
+    * HTML entities, decoded to their characters so ``&bull;`` does not become a
+      word.
+
+    Block-level tags are turned into newlines before removal so sentence
+    boundaries and list items stay separated instead of running together.
+    """
+    chunks: list[str] = []
     for text in text_blocks:
-        for token in re.findall(r"[A-Za-z]{4,}", text.lower()):
-            if token in seen:
-                continue
-            seen.add(token)
-            ordered.append(token)
-            if len(ordered) >= limit:
-                return ordered
-    return ordered
+        text = _BASE64_DATA_URI_RE.sub(" ", text)
+        text = _ATTR_RE.sub(" ", text)
+        text = _RAW_TEXT_BLOCK_RE.sub(" ", text)
+        # Preserve structure: block boundaries become line breaks, and inline tags
+        # are deleted without a separator so a word split across tags ("Secu<b>rity")
+        # is not torn into two words.
+        text = _BLOCK_TAG_RE.sub("\n", text)
+        text = _TAG_OR_DECL_RE.sub("", text)
+        text = _html_mod.unescape(text)
+        text = re.sub(r"&[A-Za-z0-9#]+;", " ", text)
+        chunks.append(text)
+
+    # Collapse the whitespace the tag removal introduced, keeping line structure.
+    prose_lines: list[str] = []
+    for line in "\n".join(chunks).splitlines():
+        collapsed = re.sub(r"[ \t\f\v]+", " ", line).strip()
+        if collapsed:
+            prose_lines.append(collapsed)
+    return "\n".join(prose_lines)
 
 
 def _merge_synonym_groups(*group_sets: Sequence[Sequence[str]]) -> list[list[str]]:
@@ -397,16 +453,16 @@ def main() -> None:
     count = prompt_int(_prompt_text("🔢", "How many variants? "), lo=1)
 
     generate_synonyms = args.generate_synonyms
-    if generate_synonyms is None:
-        generate_synonyms = _prompt_yes_no(
-            _prompt_text("🧠", "Generate synonym map automatically? y/n (default n): "),
-            default=False,
-        )
 
-    provider_names = _parse_provider_names(args.synonym_providers)
-    synonym_providers: list[SynonymProvider] | None = None
-    if provider_names:
-        synonym_providers = _create_synonym_providers(provider_names)
+    # Fail before the first document rather than part-way through a run: reaching a
+    # stopped daemon or an unpulled model after minutes of work is a worse
+    # experience than a clear message up front.
+    if generate_synonyms:
+        try:
+            check_available(model=args.synonym_model, host=args.ollama_host)
+        except SynonymDataUnavailable as exc:
+            print(_status_text("❌", str(exc), _Ansi.YELLOW))
+            return 1
 
     synonym_lines: List[str] = []
     synonym_path = ""
@@ -431,28 +487,11 @@ def main() -> None:
         break
     file_synonym_groups = parse_synonym_lines(synonym_lines)
 
-    generated_synonym_groups: list[list[str]] = []
-    if generate_synonyms:
-        seed_blocks = [read_text_with_fallback(path, input_encoding) for path in input_paths]
-        seed_terms = _extract_seed_terms(seed_blocks)
-        generated_synonym_groups = generate_synonym_groups(seed_terms, enabled_providers=synonym_providers)
-
     write_generated_synonym_map = args.write_generated_synonym_map
     if write_generated_synonym_map is None:
         write_generated_synonym_map = bool(generate_synonyms)
 
-    synonym_groups = _merge_synonym_groups(file_synonym_groups, generated_synonym_groups)
-    synonym_patterns = build_synonym_patterns(synonym_groups)
-
-    if file_synonym_groups and generated_synonym_groups:
-        source_summary = "file+generated"
-    elif generated_synonym_groups:
-        source_summary = "generated"
-    elif file_synonym_groups:
-        source_summary = "file"
-    else:
-        source_summary = "none"
-    print(_status_text("ℹ️", f"Synonym source: {source_summary} ({len(synonym_groups)} groups)"))
+    generated_synonym_groups: list[list[str]] = []
 
     base_max_nesting = args.max_nesting
     if base_max_nesting is None:
@@ -480,7 +519,6 @@ def main() -> None:
         enable_noise_textures=args.enable_noise_textures,
         enable_color_palette_randomization=args.enable_color_palette_randomization,
         enable_span_wrapping=args.enable_span_wrapping,
-        enable_alt_text_randomization=args.enable_alt_text_randomization,
         enable_meta_noise=args.enable_meta_noise,
         enable_jsonld_noise=args.enable_jsonld_noise,
         enable_noise_divs=args.enable_noise_divs,
@@ -538,6 +576,8 @@ def main() -> None:
             filename_prefixes[input_path] = prefix
 
     output_locations: list[Path] = []
+    generated_documents: set[str] = set()
+
     def _build_libero_html(html_text: str) -> str:
         return encode_quoted_printable_html(
             html_text,
@@ -551,6 +591,30 @@ def main() -> None:
         sanitized = sanitize_input_html(raw_html)
         lang = extract_lang(sanitized, fallback_lang="it" if opt.output_mode == "libero" else "en")
 
+        # Synonyms are generated per document, in that document's own language.
+        # A single global pass would apply one language's lexicon to every file.
+        per_file_groups = list(file_synonym_groups)
+        if generate_synonyms:
+            # The model is given the document's prose, not a bag of words: judging
+            # grammar and sense needs sentences.
+            prose = extract_document_prose([sanitized])
+            try:
+                per_file_groups = _merge_synonym_groups(
+                    per_file_groups,
+                    generate_synonym_groups(prose, lang=lang, model=args.synonym_model),
+                )
+            except SynonymDataUnavailable as exc:
+                print(_status_text("❌", str(exc), _Ansi.YELLOW))
+                return 1
+        synonym_patterns = build_synonym_patterns(per_file_groups)
+        generated_synonym_groups.extend(per_file_groups)
+        print(
+            _status_text(
+                "ℹ️",
+                f"Synonyms for {input_path.name} [{lang}]: {len(per_file_groups)} groups",
+            )
+        )
+
         if output_path_mode == "different":
             outdir = Path(f"variants_{ts}_{input_path.stem}")
             outdir.mkdir(parents=True, exist_ok=True)
@@ -560,22 +624,27 @@ def main() -> None:
             filename_prefix = filename_prefixes.get(input_path, f"{input_path.stem}_")
 
         for i in range(1, opt.count + 1):
-            variant_title = random_title()
-            variant = build_variant(
-                rng,
-                sanitized,
-                opt,
-                i,
-                lang,
-                variant_title,
-                synonym_patterns,
-                image_cache=image_cache,
-            )
-            if opt.output_mode == "libero":
-                variant = _build_libero_html(variant)
-                output_name = f"{filename_prefix}variant_{i:03d}.html"
+            # Identity is checked after final encoding, not inferred from CSS differences.
+            for _attempt in range(32):
+                variant_title = random_title()
+                variant = build_variant(
+                    rng,
+                    sanitized,
+                    opt,
+                    i,
+                    lang,
+                    variant_title,
+                    synonym_patterns,
+                    image_cache=image_cache,
+                )
+                if opt.output_mode == "libero":
+                    variant = _build_libero_html(variant)
+                if variant not in generated_documents:
+                    generated_documents.add(variant)
+                    break
             else:
-                output_name = f"{filename_prefix}variant_{i:03d}.html"
+                raise RuntimeError(f"Unable to produce a unique variant for {input_path.name} at index {i}")
+            output_name = f"{filename_prefix}variant_{i:03d}.html"
             (outdir / output_name).write_text(variant, encoding="utf-8")
 
         output_locations.append(outdir.resolve())
