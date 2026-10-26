@@ -27,17 +27,21 @@ _REMOTE_SCHEMES = ("http://", "https://")
 
 @dataclass
 class RemoteImageCache:
+    """Run-wide store of downloaded images and their decoded pixels.
+
+    One instance is shared by every variant so a remote image is fetched once and
+    decoded once; variants then jitter copies of the cached pixels.
+    """
+
     enabled: bool = True
     _data_urls: dict[str, str] = field(default_factory=dict)
+    jitter: ImageJitterCache = field(default_factory=ImageJitterCache)
 
     def get(self, url: str) -> str | None:
-        if not self.enabled:
-            return None
         return self._data_urls.get(url)
 
     def store(self, url: str, data_url: str) -> str:
-        if self.enabled:
-            self._data_urls[url] = data_url
+        self._data_urls[url] = data_url
         return data_url
 
     def get_or_create(self, url: str, builder: Callable[[str], str]) -> str:
@@ -46,6 +50,9 @@ class RemoteImageCache:
             return cached
         data_url = builder(url)
         return self.store(url, data_url)
+
+    def fetch_once(self, url: str, fetcher: Callable[[str], str]) -> str:
+        return self.jitter.get_or_fetch(url, fetcher)
 
 
 @dataclass(frozen=True)
@@ -88,7 +95,7 @@ class ImageInliner:
         reference = classify_image_reference(value)
         if reference.kind != "remote":
             return value
-        return self.cache.get_or_create(reference.original, self._download_as_data_url)
+        return self.cache.fetch_once(reference.original, self._download_as_data_url)
 
     def _download_as_data_url(self, url: str) -> str:
         request = Request(url, headers={"User-Agent": "FingerprintlessHTML/1.0"})
@@ -339,106 +346,189 @@ def _jpeg_reencode_cost(original: bytes, encoded: str) -> float:
     return total / float(before.size[0] * before.size[1])
 
 
-def jitter_data_uri(rng: random.Random, data_uri: str) -> str:
+class _DecodedImage:
+    """An image decoded once, ready to be jittered repeatedly.
+
+    ``image`` is the untouched source pixels; callers ``copy()`` it before making
+    any change, so the cached original is never mutated.
+    """
+
+    __slots__ = ("mime", "format", "image", "quantization", "profiles", "raw")
+
+    def __init__(self, *, mime: str, format: str, image, quantization, profiles, raw: bytes):
+        self.mime = mime
+        self.format = format
+        self.image = image
+        self.quantization = quantization
+        self.profiles = profiles
+        self.raw = raw
+
+
+@dataclass
+class ImageJitterCache:
+    """Per-run store of clean image data.
+
+    The whole point of the cache is that an image is fetched and decoded **once**,
+    no matter how many variants reference it. Each variant then jitters a copy of
+    the cached pixels, so it gets a unique payload without repeating the download
+    or the decode.
+    """
+
+    enabled: bool = True
+    _downloads: dict[str, str] = field(default_factory=dict)
+    _decoded: dict[str, _DecodedImage | None] = field(default_factory=dict)
+
+    def get_or_fetch(self, url: str, fetcher: Callable[[str], str]) -> str:
+        """Return the data URI for ``url``, downloading it at most once per run.
+
+        This cache is independent of ``enabled``: skipping duplicate downloads is
+        always correct, and turning off payload inlining controls *whether* a URL
+        is inlined, not how many times it is fetched.
+        """
+        cached = self._downloads.get(url)
+        if cached is not None:
+            return cached
+        data_uri = fetcher(url)
+        self._downloads[url] = data_uri
+        return data_uri
+
+    def decode(self, data_uri: str) -> _DecodedImage | None:
+        """Return the decoded image for ``data_uri``, or ``None`` if it is unsuitable.
+
+        Only formats that can be re-encoded without losing information are
+        decoded: GIF has no palette space for a one-off colour, SVG has no pixels,
+        AVIF has no encoder in the supported Pillow range, and lossy WebP cannot
+        be re-saved without a whole-image quality loss.
+        """
+        if not self.enabled:
+            return None
+        cached = self._decoded.get(data_uri)
+        if data_uri in self._decoded:
+            return cached
+        decoded = self._decode(data_uri)
+        self._decoded[data_uri] = decoded
+        return decoded
+
+    @staticmethod
+    def _decode(data_uri: str) -> _DecodedImage | None:
+        match = _DATA_URI_RE.match(data_uri.strip())
+        if not match:
+            return None
+        payload = match.group("payload")
+        if _decoded_payload_length(payload) > _MAX_JITTER_PAYLOAD_BYTES:
+            return None
+        Image = _pillow_image_module()
+        if Image is None:
+            return None
+        try:
+            raw = base64.b64decode("".join(payload.split()), validate=True)
+        except (ValueError, TypeError):
+            return None
+        try:
+            with Image.open(io.BytesIO(raw)) as probe:
+                fmt = (probe.format or "").upper()
+                if fmt not in _JITTERABLE_FORMATS:
+                    return None
+                probe.load()
+                if fmt == "WEBP" and not _webp_is_lossless(raw):
+                    return None
+                return _DecodedImage(
+                    mime=match.group("mime").lower(),
+                    format=fmt,
+                    image=probe.copy(),
+                    # ``quantization`` mirrors the source tables, so re-saving keeps
+                    # the source's compression level instead of flattening it.
+                    quantization=getattr(probe, "quantization", None),
+                    profiles=_preserved_profiles(probe),
+                    raw=raw,
+                )
+        except Exception:  # malformed image payloads stay untouched
+            return None
+
+
+def jitter_data_uri(
+    rng: random.Random, data_uri: str, cache: ImageJitterCache | None = None
+) -> str:
     """Return ``data_uri`` with imperceptible pixel noise, or unchanged.
 
-    Returns the input untouched when it is not an inlinable raster data URI,
-    when Pillow is unavailable, when the format cannot be re-encoded safely,
-    or when the payload exceeds ``_MAX_JITTER_PAYLOAD_BYTES``. Callers must not
-    treat an identical return value as an error: whole-document uniqueness is
-    still enforced downstream.
+    Pass the run's ``ImageJitterCache`` when jittering many variants: the image is
+    then decoded once for the whole run, and only the pixel change plus the
+    encode happens per call. Callers must not treat an identical return value as
+    an error: whole-document uniqueness is still enforced downstream.
     """
-    match = _DATA_URI_RE.match(data_uri.strip())
-    if not match:
-        return data_uri
-    payload = match.group("payload")
-    if _decoded_payload_length(payload) > _MAX_JITTER_PAYLOAD_BYTES:
+    cache = cache or ImageJitterCache()
+    decoded = cache.decode(data_uri)
+    if decoded is None:
         return data_uri
 
-    Image = _pillow_image_module()
-    if Image is None:
-        return data_uri
-    try:
-        raw = base64.b64decode("".join(payload.split()), validate=True)
-    except (ValueError, TypeError):
-        return data_uri
-
-    try:
-        with Image.open(io.BytesIO(raw)) as probe:
-            fmt = (probe.format or "").upper()
-            if fmt not in _JITTERABLE_FORMATS:
-                return data_uri
-            probe.load()
-            # ``quantization`` mirrors the source tables, so re-saving keeps the
-            # source's compression level instead of silently flattening it.
-            source_quantization = getattr(probe, "quantization", None)
-            profiles = _preserved_profiles(probe)
-            image = probe.copy()
-    except Exception:  # malformed image payloads stay untouched
-        return data_uri
-
-    if fmt == "WEBP" and not _webp_is_lossless(raw):
-        return data_uri
-
+    image = decoded.image.copy()
     try:
         changed = (
             _jitter_pixels_for_jpeg(rng, image)
-            if fmt == "JPEG"
+            if decoded.format == "JPEG"
             else _jitter_pixel(rng, image)
         )
         if not changed:
             return data_uri
         buffer = io.BytesIO()
-        if fmt == "JPEG":
+        if decoded.format == "JPEG":
             # 4:2:0 chroma averaging would swallow most of the speckle, so the
             # jittered image is written as 4:4:4 at the source's own quality and
             # then measured for fidelity below.
-            save_kwargs: dict[str, object] = {"subsampling": 0, **profiles}
-            if source_quantization:
-                save_kwargs["qtables"] = source_quantization
+            save_kwargs: dict[str, object] = {"subsampling": 0, **decoded.profiles}
+            if decoded.quantization:
+                save_kwargs["qtables"] = decoded.quantization
             else:
                 save_kwargs["quality"] = 95
             image.save(buffer, format="JPEG", **save_kwargs)
-        elif fmt == "WEBP":
-            image.save(buffer, format="WEBP", lossless=True, **profiles)
+        elif decoded.format == "WEBP":
+            image.save(buffer, format="WEBP", lossless=True, **decoded.profiles)
         else:
-            image.save(buffer, format=fmt, **profiles)
+            image.save(buffer, format=decoded.format, **decoded.profiles)
         encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     except Exception:  # encoding failures must never break generation
         return data_uri
     finally:
         image.close()
 
-    if encoded == "".join(payload.split()):
+    if encoded == base64.b64encode(decoded.raw).decode("ascii"):
         return data_uri
-    if fmt == "JPEG" and _jpeg_reencode_cost(raw, encoded) > _JPEG_MAX_REENCODE_PSNR_LOSS:
+    if (
+        decoded.format == "JPEG"
+        and _jpeg_reencode_cost(decoded.raw, encoded) > _JPEG_MAX_REENCODE_PSNR_LOSS
+    ):
         # Re-encoding would visibly soften the source; leave it byte-identical.
         return data_uri
-    mime = match.group("mime").lower()
-    return f"data:{mime};base64,{encoded}"
+    return f"data:{decoded.mime};base64,{encoded}"
 
 
 def jitter_image_references(
-    html_text: str, rng: random.Random, *, enabled: bool = True
+    html_text: str,
+    rng: random.Random,
+    *,
+    enabled: bool = True,
+    cache: ImageJitterCache | None = None,
 ) -> str:
     """Apply ``jitter_data_uri`` to every ``<img src>`` and CSS ``url()``.
 
     Each occurrence is jittered independently, so two references to the same
-    image inside one variant become two distinct payloads.
+    image inside one variant become two distinct payloads, while the underlying
+    pixels are still decoded only once for the run.
     """
     if not enabled:
         return html_text
+    cache = cache or ImageJitterCache()
 
     def _jitter_src(match: re.Match[str]) -> str:
         value = match.group("value")
-        rewritten = jitter_data_uri(rng, value)
+        rewritten = jitter_data_uri(rng, value, cache)
         if rewritten == value:
             return match.group(0)
         return f"{match.group('prefix')}{match.group('open')}{rewritten}{match.group('open')}"
 
     def _jitter_css(match: re.Match[str]) -> str:
         value = match.group("value")
-        rewritten = jitter_data_uri(rng, value)
+        rewritten = jitter_data_uri(rng, value, cache)
         if rewritten == value:
             return match.group(0)
         return f"url({match.group('open')}{rewritten}{match.group('open')})"

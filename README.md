@@ -187,9 +187,9 @@ Every transformation is on by default; the flags disable it.
 --generated-synonym-map-filename Name of the map file
 ```
 
-When jitter is enabled the remote-image cache is per variant, because a shared
-cache would hand every variant the same stored payload. Each variant downloads
-its images once.
+Each referenced remote image is downloaded and decoded once for the whole run,
+then every variant jitters its own copy of those cached pixels, so no variant
+re-downloads or re-decodes an image it shares with another.
 
 ## Example
 

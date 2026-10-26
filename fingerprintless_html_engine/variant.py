@@ -341,21 +341,17 @@ def build_variant(
     content_html = inline_image_references(
         content_html,
         enabled=opt.enable_image_inlining and opt.output_mode != "libero",
-        # The cache is per variant when pixel jitter is on: a shared cache would
-        # hand every variant the same stored payload for the same remote URL.
-        cache=(
-            image_cache
-            if opt.enable_remote_image_cache and not opt.enable_image_pixel_jitter
-            else RemoteImageCache(enabled=False)
-        ),
+        cache=image_cache,
     )
-    # Jitter after inlining so freshly downloaded payloads are covered, and
-    # before any downstream step can copy the tag, so every insertion site
-    # within this variant carries a unique base64 string.
+    # Jitter from the cached decoded pixels, not from a fresh decode per variant, so
+    # each variant's image payload differs while the image is fetched and decoded
+    # only once for the whole run. This runs before any downstream step can copy
+    # the tag, so every insertion site carries a unique base64 string.
     content_html = jitter_image_references(
         content_html,
         rng,
         enabled=opt.enable_image_pixel_jitter and opt.output_mode != "libero",
+        cache=image_cache.jitter if image_cache is not None else None,
     )
     content_html = replace_cellspacing_with_css(content_html)
     body_css, wrapper_css, extra_css, inline_styles = random_css(

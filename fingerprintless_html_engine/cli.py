@@ -190,9 +190,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--no-remote-image-cache",
-        action="store_false",
-        dest="enable_remote_image_cache",
-        help="Disable reuse of downloaded remote image payloads across references within a run.",
+        action="store_true",
+        dest="disable_remote_image_cache",
+        help="Disable reuse of downloaded remote images within a run.",
     )
     parser.add_argument(
         "--no-image-pixel-jitter",
@@ -273,7 +273,6 @@ def _build_parser() -> argparse.ArgumentParser:
         ie_condition_randomize=True,
         structure_randomize=True,
         enable_image_inlining=True,
-        enable_remote_image_cache=True,
         enable_image_pixel_jitter=True,
     )
     return parser
@@ -498,7 +497,7 @@ def main() -> None:
         enable_layout_randomization=args.enable_layout_randomization,
         enable_body_styles=args.enable_body_styles,
         enable_image_inlining=args.enable_image_inlining,
-        enable_remote_image_cache=args.enable_remote_image_cache,
+        enable_remote_image_cache=not args.disable_remote_image_cache,
         enable_image_pixel_jitter=args.enable_image_pixel_jitter,
         disable_layout_tables=args.disable_layout_tables,
         disable_wrapper_styles=args.disable_wrapper_styles,
@@ -518,9 +517,9 @@ def main() -> None:
         base_outdir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random()
-    image_cache = None
-    if opt.enable_image_inlining and opt.enable_remote_image_cache:
-        image_cache = RemoteImageCache(enabled=True)
+    # One cache for the whole run: each source image is fetched and decoded once,
+    # then every variant jitters its own copy of those pixels.
+    image_cache = RemoteImageCache(enabled=opt.enable_remote_image_cache)
 
     def _sanitize_token(value: str) -> str:
         cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value)
