@@ -18,9 +18,8 @@ from .css_utils import (
 )
 from .image_utils import RemoteImageCache, inline_image_references
 from .html_utils import extract_body_content_with_inline_safe_styles, minify_output_html
-from .jsonld_utils import build_fake_jsonld_scripts
 from .models import Opt
-from .noise_utils import ie_noise_block, meta_noise
+from .noise_utils import ie_noise_block
 from .random_utils import _clamp_rate, maybe, pick, rfloat, rint
 from .safe_css_utils import source_css_rules
 from .structure_utils import randomize_structure, wrap_content_boxes
@@ -223,7 +222,6 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
     chunk_len_min = max(1, opt.chunk_len_min + rint(rng, -1, 1))
     chunk_len_max = max(chunk_len_min, opt.chunk_len_max + rint(rng, -1, 1))
 
-    noise_divs_max = max(0, opt.noise_divs_max + rint(rng, -1, 1))
     nesting_jitter = max(0, opt.max_nesting_jitter)
     max_nesting = max(1, opt.max_nesting + rint(rng, -nesting_jitter, nesting_jitter))
 
@@ -235,7 +233,6 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         per_word_rate=_clamp_rate(opt.per_word_rate * word_factor),
         enable_wrap_chunk_rate=opt.enable_wrap_chunk_rate,
         enable_per_word_rate=opt.enable_per_word_rate,
-        noise_divs_max=noise_divs_max,
         max_nesting=max_nesting,
         max_nesting_jitter=opt.max_nesting_jitter,
         title_prefix=opt.title_prefix,
@@ -251,9 +248,6 @@ def randomize_opt_for_variant(rng: random.Random, opt: Opt) -> Opt:
         enable_noise_textures=opt.enable_noise_textures,
         enable_color_palette_randomization=opt.enable_color_palette_randomization,
         enable_span_wrapping=opt.enable_span_wrapping,
-        enable_meta_noise=opt.enable_meta_noise,
-        enable_jsonld_noise=opt.enable_jsonld_noise,
-        enable_noise_divs=opt.enable_noise_divs,
         enable_wrapper_nesting=opt.enable_wrapper_nesting,
         enable_layout_randomization=opt.enable_layout_randomization,
         enable_body_styles=opt.enable_body_styles,
@@ -389,12 +383,6 @@ def build_variant(
         wrap_spans=not strict_mode and opt.enable_span_wrapping,
         output_mode=opt.output_mode,
     )
-    jsonld_scripts = (
-        ""
-        if super_strict or not opt.enable_jsonld_noise
-        else build_fake_jsonld_scripts(rng)
-    )
-
     before = ""
     after = ""
     if opt.ie_condition_randomize and not super_strict:
@@ -433,12 +421,10 @@ def build_variant(
         close_wrap=close_wrap,
         body_css=body_css,
         wrapper_css=wrapper_css,
-        jsonld_scripts=jsonld_scripts,
         extra_css=extra_css,
         output_mode=opt.output_mode,
         variant_identity=_variant_identity(idx, title),
         allow_ie_conditional_comments=opt.ie_condition_randomize,
-        enable_meta_noise=opt.enable_meta_noise,
         enable_layout_randomization=opt.enable_layout_randomization,
         disable_layout_tables=opt.disable_layout_tables,
         disable_wrapper_styles=opt.disable_wrapper_styles,
@@ -463,11 +449,9 @@ def build_layout_template(
     close_wrap: str,
     body_css: str,
     wrapper_css: str,
-    jsonld_scripts: str,
     extra_css: str,
     output_mode: str,
     allow_ie_conditional_comments: bool = True,
-    enable_meta_noise: bool = False,
     enable_layout_randomization: bool = True,
     disable_layout_tables: bool = False,
     disable_wrapper_styles: bool = False,
@@ -515,10 +499,8 @@ def build_layout_template(
         '<meta charset="utf-8" />'
         '<meta name="viewport" content="width=device-width, initial-scale=1" />'
         '<meta name="x-apple-disable-message-reformatting" content="yes" />'
-        f"{meta_noise(rng, enabled=enable_meta_noise, source_bg_color=body_background_color) if not strict_mode else ''}"
         f"<title>{html.escape(title)}</title>"
         f"{style_block}"
-        f"{jsonld_scripts}"
         "</head>"
     )
 

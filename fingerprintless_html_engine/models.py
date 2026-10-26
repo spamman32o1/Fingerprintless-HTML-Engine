@@ -15,7 +15,6 @@ class Opt:
     enable_wrap_chunk_rate: bool = True
     enable_per_word_rate: bool = True
 
-    noise_divs_max: int = 4
     max_nesting: int = 4
     max_nesting_jitter: int = 0
     title_prefix: str = "Variant"
@@ -33,9 +32,6 @@ class Opt:
     enable_noise_textures: bool = True
     enable_color_palette_randomization: bool = True
     enable_span_wrapping: bool = True
-    enable_meta_noise: bool = False
-    enable_jsonld_noise: bool = False
-    enable_noise_divs: bool = False
     enable_wrapper_nesting: bool = True
     enable_layout_randomization: bool = True
     enable_body_styles: bool = True

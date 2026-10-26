@@ -153,42 +153,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable span wrapping in text nodes.",
     )
     parser.add_argument(
-        "--meta-noise",
-        action="store_true",
-        dest="enable_meta_noise",
-        help="Opt into randomized metadata (disabled by default).",
-    )
-    parser.add_argument(
-        "--no-meta-noise",
-        action="store_false",
-        dest="enable_meta_noise",
-        help="Disable randomized meta tag noise in the document head.",
-    )
-    parser.add_argument(
-        "--jsonld-noise",
-        action="store_true",
-        dest="enable_jsonld_noise",
-        help="Opt into JSON-LD noise (disabled by default).",
-    )
-    parser.add_argument(
-        "--no-jsonld-noise",
-        action="store_false",
-        dest="enable_jsonld_noise",
-        help="Disable fake JSON-LD script noise.",
-    )
-    parser.add_argument(
-        "--noise-divs",
-        action="store_true",
-        dest="enable_noise_divs",
-        help="Opt into non-rendering structural noise (disabled by default).",
-    )
-    parser.add_argument(
-        "--no-noise-divs",
-        action="store_false",
-        dest="enable_noise_divs",
-        help="Disable randomized decorative noise divs.",
-    )
-    parser.add_argument(
         "--no-wrapper-nesting",
         action="store_false",
         dest="enable_wrapper_nesting",
@@ -519,9 +483,6 @@ def main() -> None:
         enable_noise_textures=args.enable_noise_textures,
         enable_color_palette_randomization=args.enable_color_palette_randomization,
         enable_span_wrapping=args.enable_span_wrapping,
-        enable_meta_noise=args.enable_meta_noise,
-        enable_jsonld_noise=args.enable_jsonld_noise,
-        enable_noise_divs=args.enable_noise_divs,
         enable_wrapper_nesting=args.enable_wrapper_nesting,
         enable_layout_randomization=args.enable_layout_randomization,
         enable_body_styles=args.enable_body_styles,

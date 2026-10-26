@@ -131,20 +131,13 @@ When Libero mode is enabled, the engine emits quoted-printable encoded `.html` f
 wrapping the content as `.eml`. Libero mode keeps super strict rendering rules while applying the strict
 encoding expected by providers like libero.it.
 
-## 🧾 Metanoise
-Artificial metadata, JSON-LD noise, IE comments, and decorative noise are **disabled by default**. Enable them explicitly with `--meta-noise`, `--jsonld-noise`, `--ie-conditional-comments`, and `--noise-divs` when needed. Each batch checks final HTML uniqueness, including when visual jitter is disabled. Source-relative styling preserves the original design instead of selecting a fixed palette.
-
-The optional metadata generator:
-
-- Picks a mix of `name`, `property`, and `http-equiv` tags from diverse categories (SEO, social, caching, mobile, privacy) to keep headers varied.
-- Randomizes attribute casing, whitespace, separators, and occasionally prefixes values with unique identifiers for organic entropy.
-- Avoids obvious duplication while still allowing selective repeats so the head looks hand-authored rather than machine-perfect.
-
-Metadata is optional because predictable artificial noise can itself become a recognizable signature. Source-relative variation and non-rendering structural diversity are the safer defaults.
+## 🧾 Optional noise
+IE conditional comments are **disabled by default**. Enable them with `--ie-conditional-comments`. Each batch checks final HTML uniqueness, including when visual jitter is disabled. Source-relative styling preserves the original design instead of selecting a fixed palette.
 
 ## 📦 Requirements
 - Python 3.10+
-- No external dependencies
+- No Python dependencies
+- Optional, for synonym generation: [Ollama](https://ollama.com) (see **Synonym generation** above)
 
 ## 🌟 Why It Shines
 Fingerprintless HTML Engine is engineered for **aggressive uniqueness** without sacrificing **rendering fidelity**. It’s a **powerful**, **surgical**, and **battle-tested** way to introduce safe entropy into HTML.
