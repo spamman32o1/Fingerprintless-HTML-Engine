@@ -35,7 +35,9 @@ class RemoteImageCache:
 
     enabled: bool = True
     _data_urls: dict[str, str] = field(default_factory=dict)
-    jitter: ImageJitterCache = field(default_factory=ImageJitterCache)
+    # Deferred lookup: ImageJitterCache is defined further down this module, and
+    # the factory call runs at instantiation time rather than at class creation.
+    jitter: ImageJitterCache = field(default_factory=lambda: ImageJitterCache())
 
     def get(self, url: str) -> str | None:
         return self._data_urls.get(url)
