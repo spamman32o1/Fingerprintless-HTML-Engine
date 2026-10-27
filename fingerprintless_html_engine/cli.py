@@ -221,16 +221,19 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--generate-synonyms",
         action="store_true",
-        default=True,
+        default=False,
         dest="generate_synonyms",
-        help="Enable automatic synonym map generation (default).",
+        help=(
+            "Opt into automatic AI synonym generation via a local Ollama model "
+            "(disabled by default; requires a running Ollama daemon)."
+        ),
     )
     parser.add_argument(
         "--no-generate-synonyms",
         action="store_false",
-        default=True,
+        default=False,
         dest="generate_synonyms",
-        help="Disable automatic synonym map generation.",
+        help="Disable automatic synonym generation (default).",
     )
     parser.add_argument(
         "--ollama-host",

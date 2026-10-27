@@ -29,7 +29,11 @@ inlined, just byte-identical across variants.
 ./script.py
 ```
 
-There are no positional arguments — everything is prompt-driven:
+Everything is prompt-driven except the flags; AI synonym generation is opt-in:
+
+```bash
+./script.py --generate-synonyms
+```
 
 1. **Input file path(s)** — comma-separated for multiple files.
 2. **How many variants?**
@@ -58,10 +62,11 @@ Gradients and noise textures are a separate concern: they are only ever applied
 when the source document has no styles of its own, and `--no-gradients` /
 `--no-noise-textures` turn them off outright.
 
-## Synonym generation (local LLM)
+## Synonym generation (local LLM, opt-in)
 
 Text variation is produced by a small local model served by
-[Ollama](https://ollama.com). Start the server once:
+[Ollama](https://ollama.com). It is **off by default** — pass
+`--generate-synonyms` to enable it, and start the server once:
 
 ```bash
 docker compose up -d ollama
@@ -91,8 +96,9 @@ How it works:
 
 Override with `--synonym-model` / `--ollama-host`, or `OLLAMA_MODEL` /
 `OLLAMA_HOST`. If the daemon is down or the model isn't pulled, the run stops
-before writing anything and prints the command to fix it. Use
-`--no-generate-synonyms` to skip swaps, or pass your own map file.
+before writing anything and prints the command to fix it. With
+`--generate-synonyms` off (the default) no Ollama connection is attempted and
+text variation is skipped; you can still pass your own map file.
 
 Generated groups are written to `generated_synonym_map.txt` in the output folder
 (pipe-delimited, reusable via the map-file prompt). Disable with
@@ -177,8 +183,8 @@ Every transformation is on by default; the flags disable it.
 --no-image-pixel-jitter          Don't alter image pixels (payloads may repeat)
 --pretty-output                  Pretty-print with indentation
 --no-pretty-output               Disable pretty-print (on by default in libero)
---generate-synonyms              Enable synonym generation (default)
---no-generate-synonyms           Disable it
+--generate-synonyms              Opt into AI synonym generation (default: off)
+--no-generate-synonyms           Disable it (default)
 --ollama-host URL                Ollama endpoint (default $OLLAMA_HOST or
                                  http://127.0.0.1:11434)
 --synonym-model NAME             Model (default qwen2.5:3b)
